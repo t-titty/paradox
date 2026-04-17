@@ -2,13 +2,15 @@ import axios, { AxiosError } from "axios";
 
 const TOKEN_KEY = "paradox.token";
 
-// VITE_API_BASE_URL is baked in at build time. If unset, fall back to a
-// relative path — correct when the server serves the client on the same
-// origin (Railway production, Vite dev proxy).
-const API_ORIGIN = import.meta.env.VITE_API_BASE_URL ?? "";
+// VITE_API_BASE_URL is baked in at build time. In production Railway sets
+// it to the deployed origin; in dev we fall back to the local server.
+// Trailing slashes are trimmed so we never produce "//api".
+export const API_URL = (
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:4000"
+).replace(/\/+$/, "");
 
 export const api = axios.create({
-  baseURL: `${API_ORIGIN}/api`,
+  baseURL: `${API_URL}/api`,
   headers: { "Content-Type": "application/json" },
 });
 

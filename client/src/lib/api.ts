@@ -2,8 +2,13 @@ import axios, { AxiosError } from "axios";
 
 const TOKEN_KEY = "paradox.token";
 
+// VITE_API_BASE_URL is baked in at build time. If unset, fall back to a
+// relative path — correct when the server serves the client on the same
+// origin (Railway production, Vite dev proxy).
+const API_ORIGIN = import.meta.env.VITE_API_BASE_URL ?? "";
+
 export const api = axios.create({
-  baseURL: "/api",
+  baseURL: `${API_ORIGIN}/api`,
   headers: { "Content-Type": "application/json" },
 });
 

@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { Link, NavLink } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.tsx";
+import { useTestMode } from "../context/TestModeContext.tsx";
 
 export function Header() {
   const { user, logout } = useAuth();
+  const { testMode } = useTestMode();
   const [open, setOpen] = useState(false);
 
   function closeMenu() {
@@ -13,13 +15,20 @@ export function Header() {
   return (
     <header className="border-b-2 border-bone">
       <div className="flex items-center justify-between gap-4 px-4 py-3 md:px-6 md:py-4">
-        <Link
-          to="/"
-          className="brutal-heading text-2xl text-bone hover:text-gold"
-          onClick={closeMenu}
-        >
-          PARADOX
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link
+            to="/"
+            className="brutal-heading text-2xl text-bone hover:text-gold"
+            onClick={closeMenu}
+          >
+            PARADOX
+          </Link>
+          {testMode && (
+            <span className="border border-gold px-2 py-[2px] font-mono text-[10px] uppercase tracking-brutal text-gold">
+              TEST MODE
+            </span>
+          )}
+        </div>
 
         {/* Desktop nav + stats. Hidden on mobile. */}
         <div className="hidden flex-1 items-center justify-between gap-8 md:flex">

@@ -24,7 +24,7 @@ app.use(cors());
 app.use(express.json({ limit: "64kb" }));
 
 app.get("/api/health", (_req, res) => {
-  res.json({ ok: true, env: env.NODE_ENV });
+  res.json({ ok: true, env: env.NODE_ENV, testMode: env.TEST_MODE });
 });
 
 app.use("/api/auth", authRouter);

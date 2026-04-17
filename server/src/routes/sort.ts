@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { prisma } from "../db.js";
+import { env } from "../env.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { HttpError } from "../middleware/error.js";
 import { parseYmd, resolvePhase } from "../phases.js";
@@ -24,7 +25,8 @@ sortRouter.get("/me", requireAuth, async (req, res, next) => {
     const phase = resolvePhase();
     const airDate = parseYmd(phase.today);
 
-    if (phase.phase === "vow" || phase.phase === "bridge") {
+    // Test mode: "Sort Me Now" — skip the phase gate entirely.
+    if (!env.TEST_MODE && (phase.phase === "vow" || phase.phase === "bridge")) {
       throw new HttpError(425, "Sorting begins after the Vow closes.", "phase_early");
     }
 

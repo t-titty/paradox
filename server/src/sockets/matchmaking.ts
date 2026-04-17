@@ -1,6 +1,7 @@
 import type { Choice } from "@prisma/client";
 import type { Server } from "socket.io";
 import { prisma } from "../db.js";
+import { env } from "../env.js";
 import { parseYmd, resolvePhase } from "../phases.js";
 import type { TribeName } from "../lib/oracle.js";
 import { MIN_OPPOSITION_FOR_MATCH, oppositionScore } from "../lib/pairing.js";
@@ -32,7 +33,8 @@ interface QueueEntry {
   inEchoChamber: boolean;
 }
 
-const QUEUE_TIMEOUT_MS = 120 * 1000;
+// Test mode shortens the queue wait so testers don't sit on it.
+const QUEUE_TIMEOUT_MS = (env.TEST_MODE ? 30 : 120) * 1000;
 
 /**
  * In-memory matchmaking queue. One entry per user — re-joining while already

@@ -1,7 +1,9 @@
 import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { Header } from "./components/Header.tsx";
+import { TestModeBanner } from "./components/TestModeBanner.tsx";
 import { ProtectedRoute } from "./components/ProtectedRoute.tsx";
+import { TestModeProvider } from "./context/TestModeContext.tsx";
 import { LoginPage } from "./pages/LoginPage.tsx";
 import { RegisterPage } from "./pages/RegisterPage.tsx";
 import { TodayPage } from "./pages/TodayPage.tsx";
@@ -25,7 +27,9 @@ function LazyFallback() {
 
 export default function App() {
   return (
+    <TestModeProvider>
     <div className="flex min-h-full flex-col bg-ink text-bone">
+      <TestModeBanner />
       <Header />
       <main className="flex-1">
         <Routes>
@@ -76,5 +80,6 @@ export default function App() {
         </Routes>
       </main>
     </div>
+    </TestModeProvider>
   );
 }

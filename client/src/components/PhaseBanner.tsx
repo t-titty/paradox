@@ -8,18 +8,51 @@ const LABELS: Record<Phase, { roman: string; title: string; sub: string }> = {
   bridge: { roman: "V", title: "THE BRIDGE", sub: "Until dawn. Meet tomorrow." },
 };
 
-export function PhaseBanner({ phase, nextTransitionAt }: { phase: Phase; nextTransitionAt: string }) {
+const ALL_PHASES: Phase[] = ["drop", "vow", "sort", "duel", "bridge"];
+
+interface Props {
+  phase: Phase;
+  nextTransitionAt: string;
+  testMode?: boolean;
+  onPhaseOverride?: (p: Phase) => void;
+}
+
+export function PhaseBanner({ phase, nextTransitionAt, testMode, onPhaseOverride }: Props) {
   const { roman, title, sub } = LABELS[phase];
   return (
-    <div className="flex items-baseline justify-between border-b border-smoke px-6 py-3 font-mono text-xs uppercase tracking-brutal text-muted">
-      <span>
+    <div className="flex flex-col gap-2 border-b border-smoke px-4 py-3 font-mono text-xs uppercase tracking-brutal text-muted md:flex-row md:items-baseline md:justify-between md:px-6">
+      <span className="truncate">
         <span className="text-gold">PHASE {roman}</span>
         <span className="mx-3 text-muted">·</span>
         <span className="text-bone">{title}</span>
         <span className="mx-3 text-muted">·</span>
-        <span>{sub}</span>
+        <span className="hidden sm:inline">{sub}</span>
       </span>
-      <span>NEXT TRANSITION {fmt(nextTransitionAt)}</span>
+
+      {testMode && onPhaseOverride ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-gold">TEST MODE</span>
+          <span className="text-muted">·</span>
+          <div className="flex flex-wrap gap-1">
+            {ALL_PHASES.map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => onPhaseOverride(p)}
+                className={`border px-2 py-[2px] font-mono text-[11px] uppercase tracking-brutal ${
+                  p === phase
+                    ? "border-gold bg-gold text-ink"
+                    : "border-smoke text-muted hover:border-gold hover:text-gold"
+                }`}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <span>NEXT TRANSITION {fmt(nextTransitionAt)}</span>
+      )}
     </div>
   );
 }

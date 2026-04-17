@@ -8,6 +8,27 @@ export interface PhaseState {
   today: string;
   /** ISO timestamp at which the current phase ends (approximate). */
   nextTransitionAt: string;
+  /** True when TEST_MODE is enabled — the client uses this to unlock UI. */
+  testMode: boolean;
+}
+
+/**
+ * When test mode is on, accept a per-request phase override. Non-testers
+ * can't force this — we only honor the override when env.TEST_MODE.
+ */
+export function resolvePhaseWithOverride(
+  requestedPhase?: string | null,
+  now: Date = new Date(),
+): PhaseState {
+  const state = resolvePhase(now);
+  if (!env.TEST_MODE) return state;
+  if (!requestedPhase) return state;
+  if (!isPhase(requestedPhase)) return state;
+  return { ...state, phase: requestedPhase };
+}
+
+function isPhase(v: string): v is Phase {
+  return v === "drop" || v === "vow" || v === "sort" || v === "duel" || v === "bridge";
 }
 
 /**
@@ -29,6 +50,7 @@ export function resolvePhase(now: Date = new Date()): PhaseState {
       phase: env.PHASE_OVERRIDE,
       today: ymd(now),
       nextTransitionAt: endOfDay(now).toISOString(),
+      testMode: env.TEST_MODE,
     };
   }
 
@@ -62,6 +84,7 @@ export function resolvePhase(now: Date = new Date()): PhaseState {
     phase,
     today: ymd(now),
     nextTransitionAt: transitionDay.toISOString(),
+    testMode: env.TEST_MODE,
   };
 }
 

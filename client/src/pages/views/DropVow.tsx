@@ -8,6 +8,8 @@ interface Props {
   hasVoted: boolean;
   vote: DailyTodayResponse["vote"];
   onVoted: () => void;
+  testMode?: boolean;
+  onSortNow?: () => void;
 }
 
 /**
@@ -15,9 +17,17 @@ interface Props {
  * the brutalist reveal that frames the voting prompt. If the user has
  * already vowed, we show the locked state — no edits allowed.
  */
-export function DropVow({ paradox, hasVoted, vote, onVoted }: Props) {
+export function DropVow({ paradox, hasVoted, vote, onVoted, testMode, onSortNow }: Props) {
   if (hasVoted && vote) {
-    return <LockedVow paradox={paradox} choice={vote.choice} justification={vote.justification} />;
+    return (
+      <LockedVow
+        paradox={paradox}
+        choice={vote.choice}
+        justification={vote.justification}
+        testMode={testMode}
+        onSortNow={onSortNow}
+      />
+    );
   }
   return <VowForm paradox={paradox} onVoted={onVoted} />;
 }
@@ -206,10 +216,14 @@ function LockedVow({
   paradox,
   choice,
   justification,
+  testMode,
+  onSortNow,
 }: {
   paradox: Paradox;
   choice: Choice;
   justification: string;
+  testMode?: boolean;
+  onSortNow?: () => void;
 }) {
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-8 px-4 py-10 md:px-6 md:py-16">
@@ -224,6 +238,11 @@ function LockedVow({
           The Oracle reads at noon. Return then.
         </p>
       </div>
+      {testMode && onSortNow && (
+        <button type="button" className="brutal-btn brutal-btn-gold self-start" onClick={onSortNow}>
+          SORT ME NOW
+        </button>
+      )}
     </div>
   );
 }

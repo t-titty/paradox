@@ -15,6 +15,7 @@ export interface PhaseState {
   phase: Phase;
   today: string;
   nextTransitionAt: string;
+  testMode: boolean;
 }
 
 export interface User {

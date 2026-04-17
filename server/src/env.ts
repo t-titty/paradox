@@ -22,6 +22,13 @@ const schema = z.object({
   PHASE_OVERRIDE: z.enum(["drop", "vow", "sort", "duel", "bridge", ""]).default(""),
   FLASHBACK_MIN_DAYS: z.coerce.number().int().min(0).default(180),
   ECHO_CHAMBER_THRESHOLD: z.coerce.number().int().min(0).max(100).default(40),
+  // Test Mode — unlocks phase switching, date-check bypass, and a faster
+  // matchmaking timeout. Never enable in real production.
+  TEST_MODE: z
+    .string()
+    .optional()
+    .transform((v) => v === "true" || v === "1")
+    .default("false"),
 });
 
 const parsed = schema.safeParse(process.env);

@@ -6,6 +6,11 @@ export type DuelSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
 let singleton: DuelSocket | null = null;
 
+// Baked in at build time. If unset, io() defaults to same-origin, which
+// is correct when the server serves the client (Railway prod, Vite dev
+// proxy). When set, Socket.io connects directly to the configured URL.
+const SOCKET_URL = import.meta.env.VITE_API_BASE_URL as string | undefined;
+
 /**
  * Lazy singleton. First call attaches the JWT from localStorage to the
  * handshake. Subsequent calls return the same socket.
@@ -16,14 +21,14 @@ export function getSocket(): DuelSocket {
   if (singleton) return singleton;
 
   const token = getToken();
-  singleton = io({
-    // Vite dev proxy handles /socket.io routing in dev; same-origin in prod.
+  const opts = {
     auth: { token },
     autoConnect: true,
     reconnection: true,
     reconnectionAttempts: 5,
     reconnectionDelay: 500,
-  });
+  };
+  singleton = SOCKET_URL ? io(SOCKET_URL, opts) : io(opts);
 
   return singleton;
 }

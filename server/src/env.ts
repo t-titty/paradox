@@ -1,5 +1,12 @@
-import "dotenv/config";
+import dotenv from "dotenv";
 import { z } from "zod";
+
+// In production, only trust env vars set by the host (Railway). Loading a
+// .env file here would let a stray file (e.g., one bundled by the builder)
+// shadow the platform-provided DATABASE_URL.
+if (process.env.NODE_ENV !== "production") {
+  dotenv.config();
+}
 
 const schema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),

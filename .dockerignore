@@ -1,0 +1,26 @@
+# Nixpacks on Railway respects this file when uploading source. Keep
+# .env files out of the build so platform env vars always win.
+.env
+.env.*
+!.env.example
+
+node_modules
+**/node_modules
+
+dist
+build
+**/dist
+**/build
+
+.git
+.gitignore
+.vscode
+.idea
+.DS_Store
+*.log
+coverage
+.turbo
+
+# Client-side artifacts we rebuild on the server.
+client/dist
+server/dist

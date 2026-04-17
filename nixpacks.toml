@@ -5,7 +5,9 @@
 nixPkgs = ["nodejs_20", "openssl"]
 
 [phases.install]
-cmds = ["npm ci"]
+# Force devDeps even when NODE_ENV=production — we need tsc, prisma CLI,
+# and tsx for build + seed + migrate at deploy time.
+cmds = ["npm ci --include=dev"]
 
 [phases.build]
 cmds = ["npm run build"]

@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(claude-api)",
+      "Bash(npm install *)",
+      "Bash(npx prisma *)",
+      "Bash(npx tsc *)",
+      "Bash(npx vite *)",
+      "Bash(npm run *)",
+      "Bash(node -e \"const {PARADOXES} = require\\('./prisma/paradoxes.ts'\\); console.log\\(PARADOXES.length\\);\")",
+      "Bash(node --experimental-strip-types -e \"const {PARADOXES} = require\\('./prisma/paradoxes.ts'\\); console.log\\(PARADOXES.length\\);\")",
+      "Bash(npx tsx *)",
+      "Bash(tasklist //FI \"IMAGENAME eq node.exe\")"
+    ]
+  }
+}

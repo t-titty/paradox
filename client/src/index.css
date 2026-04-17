@@ -1,0 +1,85 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+    background: #0a0a0a;
+    color: #ffffff;
+    line-height: 1.7;
+  }
+
+  p {
+    line-height: 1.7;
+  }
+
+  ::selection {
+    background: #ffd700;
+    color: #0a0a0a;
+  }
+}
+
+@layer components {
+  .brutal-heading {
+    @apply font-mono font-bold uppercase tracking-brutal;
+  }
+
+  /* Brutalist card: sharp edges, thick bone-colored outline. */
+  .brutal-card {
+    @apply border-2 border-bone bg-ink p-6;
+    box-shadow: 8px 8px 0 0 #f5f5f5;
+  }
+
+  .brutal-card-blood {
+    @apply border-2 border-blood bg-ink p-6;
+    box-shadow: 8px 8px 0 0 #ff2d20;
+  }
+
+  .brutal-card-gold {
+    @apply border-2 border-gold bg-ink p-6;
+    box-shadow: 8px 8px 0 0 #ffd700;
+  }
+
+  .brutal-btn {
+    @apply border-2 border-bone bg-ink px-6 py-3 font-mono font-bold uppercase tracking-brutal
+           transition-none touch-manipulation;
+    min-height: 44px;
+  }
+
+  .brutal-btn:hover:not(:disabled) {
+    @apply bg-bone text-ink;
+  }
+
+  .brutal-btn:disabled {
+    @apply cursor-not-allowed opacity-40;
+  }
+
+  .brutal-btn-blood {
+    @apply border-blood;
+    color: #ff2d20;
+  }
+  .brutal-btn-blood:hover:not(:disabled) {
+    @apply bg-blood text-ink;
+  }
+
+  .brutal-btn-gold {
+    @apply border-gold;
+    color: #ffd700;
+  }
+  .brutal-btn-gold:hover:not(:disabled) {
+    @apply bg-gold text-ink;
+  }
+
+  .brutal-input {
+    @apply w-full border-2 border-bone bg-ink px-4 py-3 font-mono text-bone
+           placeholder:text-[#CCCCCC] focus:outline-none focus:ring-0 focus:border-gold;
+    min-height: 44px;
+  }
+}

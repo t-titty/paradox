@@ -1,0 +1,178 @@
+// PARADOX schema. All tables in the spec live here — Phase IV/V tables
+// (duels, synthesis_archive, tribe_history) are declared now so next
+// session's work can migrate cleanly from this baseline.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Tribe {
+  Utilitarian
+  Deontologist
+  VirtueEthicist
+  Nihilist
+  Stoic
+  Existentialist
+  Hedonist
+}
+
+enum Choice {
+  A
+  B
+}
+
+model User {
+  id             String   @id @default(cuid())
+  username       String   @unique
+  email          String   @unique
+  hashedPassword String
+  wisdomPoints   Int      @default(0)
+  civilityScore  Int      @default(100)
+  isPremium      Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  votes            Vote[]
+  tribeHistory     TribeHistory[]
+  duelsAsA         Duel[]         @relation("DuelUserA")
+  duelsAsB         Duel[]         @relation("DuelUserB")
+  throwbackRevotes ThrowbackRevote[]
+}
+
+model Paradox {
+  id          String   @id @default(cuid())
+  title       String
+  description String
+  optionA     String
+  optionB     String
+  category    String
+  // Each paradox airs on exactly one date. Null = not yet scheduled.
+  airDate     DateTime? @unique @db.Date
+  createdAt   DateTime  @default(now())
+
+  votes            Vote[]
+  duels            Duel[]
+  tribeHistory     TribeHistory[]
+  throwbackRevotes ThrowbackRevote[]
+}
+
+model Vote {
+  id            String   @id @default(cuid())
+  userId        String
+  paradoxId     String
+  choice        Choice
+  justification String
+  // Populated by Phase III. Null until Oracle has sorted.
+  tribeAssigned Tribe?
+  tribeConfidence Float?
+  tribeReasoning String?
+  createdAt     DateTime @default(now())
+  sortedAt      DateTime?
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  paradox Paradox @relation(fields: [paradoxId], references: [id], onDelete: Cascade)
+
+  throwbackRevote ThrowbackRevote?
+
+  @@unique([userId, paradoxId])
+  @@index([paradoxId, choice])
+  @@index([paradoxId, tribeAssigned])
+}
+
+// Thursday revisits. Every Thursday, eligible users revote a prior
+// Thursday paradox (≥28 days old). Original Vote stays untouched; the
+// revisit lives here so both points in time are preserved.
+model ThrowbackRevote {
+  id               String   @id @default(cuid())
+  userId           String
+  originalVoteId   String   @unique
+  paradoxId        String
+  newChoice        Choice
+  newJustification String
+  // "shifted" | "held" | "evolved" — see lib/throwback.ts
+  shift            String
+  createdAt        DateTime @default(now())
+
+  user         User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  originalVote Vote    @relation(fields: [originalVoteId], references: [id], onDelete: Cascade)
+  paradox      Paradox @relation(fields: [paradoxId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+// Denormalized tribe history for fast profile queries + Moral Constellation.
+// One row per (user, paradox) — duplicates Vote.tribeAssigned but indexed for
+// timeline scans.
+model TribeHistory {
+  id        String   @id @default(cuid())
+  userId    String
+  paradoxId String
+  tribe     Tribe
+  airDate   DateTime @db.Date
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  paradox Paradox @relation(fields: [paradoxId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, paradoxId])
+  @@index([userId, airDate])
+}
+
+// Phase IV — populated next session. Declared now so migrations stay additive.
+model Duel {
+  id                   String   @id @default(cuid())
+  paradoxId            String
+  userAId              String
+  userBId              String
+  transcriptJson       Json     @default("[]")
+  synthesisText        String?
+  synthesisGeneratedAt DateTime?
+  signedByAAt          DateTime?
+  signedByBAt          DateTime?
+  declinedAt           DateTime?
+  bothSigned           Boolean  @default(false)
+  startedAt            DateTime @default(now())
+  endedAt              DateTime?
+
+  paradox Paradox @relation(fields: [paradoxId], references: [id])
+  userA   User    @relation("DuelUserA", fields: [userAId], references: [id])
+  userB   User    @relation("DuelUserB", fields: [userBId], references: [id])
+
+  archive SynthesisArchive?
+
+  @@index([paradoxId])
+  @@index([bothSigned])
+}
+
+// Minimal stub for the Private Circles application form. Stored so ops has
+// a record to follow up on; no admin UI yet.
+model CircleApplication {
+  id           String   @id @default(cuid())
+  organization String
+  kind         String   // "university" | "company" | "other"
+  contactEmail String
+  note         String?
+  submittedByUserId String?
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+// Phase V — public archive of signed syntheses.
+model SynthesisArchive {
+  id            String   @id @default(cuid())
+  duelId        String   @unique
+  paradoxTitle  String
+  tribeA        Tribe
+  tribeB        Tribe
+  synthesisText String
+  signedAt      DateTime @default(now())
+
+  duel Duel @relation(fields: [duelId], references: [id], onDelete: Cascade)
+
+  @@index([signedAt])
+}

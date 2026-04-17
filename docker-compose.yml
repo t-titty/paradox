@@ -1,0 +1,47 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: paradox-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-paradox}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-paradox}
+      POSTGRES_DB: ${POSTGRES_DB:-paradox}
+    ports:
+      - "5432:5432"
+    volumes:
+      - paradox_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-paradox} -d ${POSTGRES_DB:-paradox}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: paradox-server
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-paradox}:${POSTGRES_PASSWORD:-paradox}@postgres:5432/${POSTGRES_DB:-paradox}?schema=public
+      PORT: 4000
+      NODE_ENV: production
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-6}
+      PHASE_DROP_HOUR: ${PHASE_DROP_HOUR:-8}
+      PHASE_VOW_END_HOUR: ${PHASE_VOW_END_HOUR:-12}
+      PHASE_SORT_END_HOUR: ${PHASE_SORT_END_HOUR:-20}
+      PHASE_OVERRIDE: ${PHASE_OVERRIDE:-}
+    ports:
+      - "4000:4000"
+    profiles:
+      - full
+
+volumes:
+  paradox_pg_data:

@@ -1,4 +1,6 @@
 import { createServer } from "node:http";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import express from "express";
 import cors from "cors";
 import { env } from "./env.js";
@@ -35,6 +37,20 @@ app.use("/api/profile", profileRouter);
 app.use("/api/flashback", flashbackRouter);
 app.use("/api/library", libraryRouter);
 app.use("/api/circles", circlesRouter);
+
+// In production, serve the built client from the same origin. The client
+// is built to client/dist; at runtime this file is server/dist/index.js,
+// so the path is ../../client/dist.
+if (env.NODE_ENV === "production") {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const clientDist = path.resolve(here, "../../client/dist");
+  app.use(express.static(clientDist));
+  // SPA fallback. Anything that isn't an /api or /socket.io request falls
+  // through to index.html so client-side routes work on refresh.
+  app.get(/^\/(?!api\/|socket\.io\/).*/, (_req, res) => {
+    res.sendFile(path.join(clientDist, "index.html"));
+  });
+}
 
 app.use(errorHandler);
 

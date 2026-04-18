@@ -4,6 +4,7 @@ import { prisma } from "../db.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { HttpError } from "../middleware/error.js";
 import { validateJustification } from "../lib/sentence.js";
+import { containsProfanity } from "../lib/profanity.js";
 import { classifyShift } from "../lib/throwback.js";
 import { resolvePhase } from "../phases.js";
 
@@ -33,6 +34,13 @@ throwbackRouter.post("/", requireAuth, async (req, res, next) => {
     const check = validateJustification(newJustification);
     if (!check.valid) {
       throw new HttpError(400, check.reason ?? "Invalid justification", "bad_justification");
+    }
+    if (containsProfanity(newJustification)) {
+      throw new HttpError(
+        400,
+        "Your justification contains prohibited language. Rewrite it without slurs or profanity.",
+        "prohibited_language",
+      );
     }
 
     const original = await prisma.vote.findUnique({

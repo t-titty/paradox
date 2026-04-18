@@ -4,6 +4,7 @@ import { z } from "zod";
 import { prisma } from "../db.js";
 import { HttpError } from "../middleware/error.js";
 import { requireAuth, signToken, type AuthedRequest } from "../middleware/auth.js";
+import { containsProfanity } from "../lib/profanity.js";
 
 export const authRouter = Router();
 
@@ -26,6 +27,14 @@ const loginSchema = z.object({
 authRouter.post("/register", async (req, res, next) => {
   try {
     const { username, email, password } = registerSchema.parse(req.body);
+
+    if (containsProfanity(username)) {
+      throw new HttpError(
+        400,
+        "Username contains prohibited language. Please choose a different username.",
+        "prohibited_username",
+      );
+    }
 
     const clash = await prisma.user.findFirst({
       where: { OR: [{ username }, { email }] },

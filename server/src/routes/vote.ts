@@ -5,6 +5,7 @@ import { env } from "../env.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { HttpError } from "../middleware/error.js";
 import { validateJustification } from "../lib/sentence.js";
+import { containsProfanity } from "../lib/profanity.js";
 import { parseYmd, resolvePhase } from "../phases.js";
 
 export const voteRouter = Router();
@@ -38,6 +39,13 @@ voteRouter.post("/", requireAuth, async (req, res, next) => {
     const check = validateJustification(justification);
     if (!check.valid) {
       throw new HttpError(400, check.reason ?? "Invalid justification", "bad_justification");
+    }
+    if (containsProfanity(justification)) {
+      throw new HttpError(
+        400,
+        "Your justification contains prohibited language. Rewrite it without slurs or profanity.",
+        "prohibited_language",
+      );
     }
 
     const paradox = await prisma.paradox.findUnique({

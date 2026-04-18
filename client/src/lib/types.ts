@@ -25,6 +25,7 @@ export interface User {
   wisdomPoints: number;
   civilityScore: number;
   isPremium?: boolean;
+  isAdmin?: boolean;
 }
 
 export interface Paradox {

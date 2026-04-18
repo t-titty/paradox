@@ -42,7 +42,15 @@ authRouter.post("/register", async (req, res, next) => {
     const hashedPassword = await bcrypt.hash(password, 12);
     const user = await prisma.user.create({
       data: { username, email, hashedPassword },
-      select: { id: true, username: true, email: true, wisdomPoints: true, civilityScore: true },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        wisdomPoints: true,
+        civilityScore: true,
+        isPremium: true,
+        isAdmin: true,
+      },
     });
 
     res.status(201).json({ user, token: signToken(user.id) });
@@ -62,6 +70,7 @@ authRouter.post("/login", async (req, res, next) => {
 
     const ok = await bcrypt.compare(password, user.hashedPassword);
     if (!ok) throw new HttpError(401, "Invalid credentials", "unauthenticated");
+    if (user.isBanned) throw new HttpError(403, "Account suspended", "banned");
 
     res.json({
       user: {
@@ -70,6 +79,8 @@ authRouter.post("/login", async (req, res, next) => {
         email: user.email,
         wisdomPoints: user.wisdomPoints,
         civilityScore: user.civilityScore,
+        isPremium: user.isPremium,
+        isAdmin: user.isAdmin,
       },
       token: signToken(user.id),
     });
@@ -90,6 +101,7 @@ authRouter.get("/me", requireAuth, async (req, res, next) => {
         wisdomPoints: true,
         civilityScore: true,
         isPremium: true,
+        isAdmin: true,
       },
     });
     if (!user) throw new HttpError(404, "User not found", "not_found");

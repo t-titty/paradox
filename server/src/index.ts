@@ -15,6 +15,9 @@ import { profileRouter } from "./routes/profile.js";
 import { flashbackRouter } from "./routes/flashback.js";
 import { libraryRouter } from "./routes/library.js";
 import { circlesRouter } from "./routes/circles.js";
+import { feedbackRouter } from "./routes/feedback.js";
+import { submissionsRouter } from "./routes/submissions.js";
+import { adminRouter } from "./routes/admin.js";
 import { errorHandler } from "./middleware/error.js";
 import { createSocketServer } from "./sockets/index.js";
 
@@ -37,6 +40,9 @@ app.use("/api/profile", profileRouter);
 app.use("/api/flashback", flashbackRouter);
 app.use("/api/library", libraryRouter);
 app.use("/api/circles", circlesRouter);
+app.use("/api/feedback", feedbackRouter);
+app.use("/api/submissions", submissionsRouter);
+app.use("/api/admin", adminRouter);
 
 // In production, serve the built client from the same origin. The client
 // is built to client/dist; at runtime this file is server/dist/index.js,

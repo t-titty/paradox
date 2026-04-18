@@ -10,6 +10,9 @@ import { TodayPage } from "./pages/TodayPage.tsx";
 import { ArchivePage } from "./pages/ArchivePage.tsx";
 import { LibraryPage } from "./pages/LibraryPage.tsx";
 import { CirclesPage } from "./pages/CirclesPage.tsx";
+import { FeedbackPage } from "./pages/FeedbackPage.tsx";
+import { SubmitDilemmaPage } from "./pages/SubmitDilemmaPage.tsx";
+import { AdminPage } from "./pages/AdminPage.tsx";
 
 // ProfilePage pulls in Three.js + r3f (heavy). Code-split it so only users
 // who visit /profile/* pay the download cost.
@@ -75,6 +78,26 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/feedback"
+            element={
+              <ProtectedRoute>
+                <FeedbackPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/submit"
+            element={
+              <ProtectedRoute>
+                <SubmitDilemmaPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Admin — never redirects. Handles its own "404" for non-admins
+              so the route is undiscoverable. */}
+          <Route path="/admin" element={<AdminPage />} />
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

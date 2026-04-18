@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { api, errorMessage } from "../lib/api.ts";
 
 interface DeepDive {
@@ -36,6 +37,9 @@ export function LibraryPage() {
           Full essays on every paradox — history, case law, the philosophers who fought over it.
           Premium only.
         </p>
+        <Link to="/submit" className="brutal-btn brutal-btn-gold mt-6 inline-block">
+          + SUBMIT A DILEMMA
+        </Link>
         {data && !data.isPremium && (
           <div className="mt-6 border-2 border-gold p-4">
             <p className="brutal-heading text-sm text-gold">UPGRADE TO PREMIUM</p>

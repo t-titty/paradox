@@ -37,7 +37,10 @@ export function Header() {
             <Nav to="/archive">ARCHIVE</Nav>
             {user && <Nav to="/profile">PROFILE</Nav>}
             {user && <Nav to="/library">LIBRARY</Nav>}
+            {user && <Nav to="/submit">SUBMIT</Nav>}
             <Nav to="/circles">CIRCLES</Nav>
+            {user && <Nav to="/feedback">FEEDBACK</Nav>}
+            {user?.isAdmin && <Nav to="/admin">ADMIN</Nav>}
           </nav>
           {user && <UserStats user={user} onLogout={logout} />}
         </div>
@@ -74,7 +77,10 @@ export function Header() {
             <MobileNav to="/archive" onClick={closeMenu}>ARCHIVE</MobileNav>
             {user && <MobileNav to="/profile" onClick={closeMenu}>PROFILE</MobileNav>}
             {user && <MobileNav to="/library" onClick={closeMenu}>LIBRARY</MobileNav>}
+            {user && <MobileNav to="/submit" onClick={closeMenu}>SUBMIT</MobileNav>}
             <MobileNav to="/circles" onClick={closeMenu}>CIRCLES</MobileNav>
+            {user && <MobileNav to="/feedback" onClick={closeMenu}>FEEDBACK</MobileNav>}
+            {user?.isAdmin && <MobileNav to="/admin" onClick={closeMenu}>ADMIN</MobileNav>}
           </nav>
           {user && (
             <div className="flex flex-col gap-2 border-t border-smoke px-4 py-4 font-mono text-sm uppercase tracking-brutal">

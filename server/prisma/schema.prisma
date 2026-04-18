@@ -26,6 +26,12 @@ enum Choice {
   B
 }
 
+enum SubmittedParadoxStatus {
+  pending
+  approved
+  rejected
+}
+
 model User {
   id             String   @id @default(cuid())
   username       String   @unique
@@ -34,6 +40,8 @@ model User {
   wisdomPoints   Int      @default(0)
   civilityScore  Int      @default(100)
   isPremium      Boolean  @default(false)
+  isAdmin        Boolean  @default(false)
+  isBanned       Boolean  @default(false)
   createdAt      DateTime @default(now())
 
   votes            Vote[]
@@ -41,6 +49,8 @@ model User {
   duelsAsA         Duel[]         @relation("DuelUserA")
   duelsAsB         Duel[]         @relation("DuelUserB")
   throwbackRevotes ThrowbackRevote[]
+  feedback         Feedback[]
+  submittedParadoxes SubmittedParadox[]
 }
 
 model Paradox {
@@ -160,6 +170,42 @@ model CircleApplication {
   createdAt    DateTime @default(now())
 
   @@index([createdAt])
+}
+
+// User-submitted feedback (bug reports, feature requests, general notes).
+// Visible to admins in the admin panel.
+model Feedback {
+  id        String   @id @default(cuid())
+  userId    String
+  category  String   // "bug" | "feature" | "general"
+  message   String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt])
+}
+
+// User-submitted paradox proposals. Admins approve/reject in the admin panel.
+// On approval, a Paradox is created and scheduled to the next free airDate.
+model SubmittedParadox {
+  id          String   @id @default(cuid())
+  userId      String
+  title       String
+  description String
+  optionA     String
+  optionB     String
+  category    String
+  reason      String
+  status      SubmittedParadoxStatus @default(pending)
+  createdAt   DateTime @default(now())
+  reviewedAt  DateTime?
+  scheduledFor DateTime? @db.Date
+  paradoxId   String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
 }
 
 // Phase V — public archive of signed syntheses.

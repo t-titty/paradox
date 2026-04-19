@@ -27,6 +27,12 @@ interface ProfileData {
     axes: { x: number; y: number; z: number };
     trajectory: { tribe: Tribe; position: [number, number, number] }[];
   };
+  submittedParadoxes: {
+    id: string;
+    title: string;
+    category: string;
+    airDate: string | null;
+  }[];
 }
 
 interface FlashbackResponse {
@@ -105,7 +111,7 @@ export function ProfilePage() {
     );
   }
 
-  const { user, history, tribeCounts, constellation } = data;
+  const { user, history, tribeCounts, constellation, submittedParadoxes } = data;
   const joined = new Date(user.createdAt).toDateString().toUpperCase();
 
   return (
@@ -159,6 +165,32 @@ export function ProfilePage() {
         <h2 className="brutal-heading text-sm text-muted">TRIBAL HISTORY</h2>
         <TribeBarChart counts={tribeCounts} />
       </section>
+
+      {submittedParadoxes.length > 0 && (
+        <section className="flex flex-col gap-4">
+          <h2 className="brutal-heading text-sm text-muted">
+            SUBMITTED PARADOXES · {submittedParadoxes.length}
+          </h2>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            {submittedParadoxes.map((p) => (
+              <article key={p.id} className="border-2 border-gold p-4">
+                <p className="font-mono text-xs uppercase tracking-brutal text-muted">
+                  {p.category} ·{" "}
+                  {p.airDate
+                    ? new Date(p.airDate).toDateString().toUpperCase()
+                    : "UNSCHEDULED"}
+                </p>
+                <h3 className="brutal-heading mt-2 text-xl text-bone">
+                  {p.title.toUpperCase()}
+                </h3>
+                <p className="mt-3 font-mono text-xs uppercase tracking-brutal text-gold">
+                  APPROVED · LIVE IN THE ROTATION
+                </p>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
 
       {isSelf && flashback && flashback.flashback && (
         <section className="flex flex-col gap-4">

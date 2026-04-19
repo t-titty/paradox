@@ -45,6 +45,21 @@ profileRouter.get("/:username", async (req, res, next) => {
       },
     });
 
+    // Community paradoxes this user submitted that made it to the schedule.
+    // We key on "has a row in Paradox" — the SubmittedParadox status flips
+    // to "approved" at the same moment the Paradox is created, so the
+    // existence of the Paradox row is the source of truth for "used".
+    const submittedParadoxes = await prisma.paradox.findMany({
+      where: { submittedById: user.id },
+      orderBy: [{ airDate: "asc" }, { createdAt: "asc" }],
+      select: {
+        id: true,
+        title: true,
+        category: true,
+        airDate: true,
+      },
+    });
+
     const tribeCounts = Object.fromEntries(TRIBES.map((t) => [t, 0])) as Record<TribeName, number>;
     for (const row of history) tribeCounts[row.tribe as TribeName]++;
 
@@ -59,6 +74,7 @@ profileRouter.get("/:username", async (req, res, next) => {
       })),
       tribeCounts,
       constellation,
+      submittedParadoxes,
     });
   } catch (e) {
     next(e);

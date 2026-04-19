@@ -36,6 +36,7 @@ export interface Paradox {
   optionB: string;
   category: string;
   airDate: string;
+  submittedBy?: { username: string } | null;
 }
 
 export interface DailyTodayResponse {

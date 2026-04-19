@@ -51,6 +51,7 @@ model User {
   throwbackRevotes ThrowbackRevote[]
   feedback         Feedback[]
   submittedParadoxes SubmittedParadox[]
+  authoredParadoxes  Paradox[]          @relation("ParadoxSubmitter")
 }
 
 model Paradox {
@@ -63,11 +64,18 @@ model Paradox {
   // Each paradox airs on exactly one date. Null = not yet scheduled.
   airDate     DateTime? @unique @db.Date
   createdAt   DateTime  @default(now())
+  // Null for seed/editorial paradoxes; populated when an admin approves
+  // a user-submitted dilemma. Nulling the user would orphan their credit
+  // rather than deleting the paradox, so onDelete:SetNull.
+  submittedById String?
+  submittedBy   User?    @relation("ParadoxSubmitter", fields: [submittedById], references: [id], onDelete: SetNull)
 
   votes            Vote[]
   duels            Duel[]
   tribeHistory     TribeHistory[]
   throwbackRevotes ThrowbackRevote[]
+
+  @@index([submittedById])
 }
 
 model Vote {

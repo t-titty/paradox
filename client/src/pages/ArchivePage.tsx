@@ -9,6 +9,7 @@ interface ArchiveEntry {
   tribeB: Tribe;
   synthesisText: string;
   signedAt: string;
+  submittedBy: { username: string } | null;
 }
 
 interface Facets {
@@ -175,7 +176,14 @@ function ArchiveCard({ entry }: { entry: ArchiveEntry }) {
   return (
     <article className="border-2 border-bone p-6">
       <div className="flex flex-wrap items-baseline justify-between gap-2 font-mono text-xs uppercase tracking-brutal">
-        <span className="text-gold">{entry.paradoxTitle}</span>
+        <span className="flex flex-wrap items-baseline gap-3">
+          <span className="text-gold">{entry.paradoxTitle}</span>
+          {entry.submittedBy && (
+            <span className="text-gold">
+              · SUBMITTED BY @{entry.submittedBy.username}
+            </span>
+          )}
+        </span>
         <span className="text-muted">
           {entry.tribeA.toUpperCase()} <span className="text-muted">↔</span>{" "}
           {entry.tribeB.toUpperCase()} · {date.toDateString().toUpperCase()}

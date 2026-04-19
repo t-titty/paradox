@@ -40,6 +40,7 @@ export async function findThrowbackVote(userId: string, today: string) {
           optionB: true,
           category: true,
           airDate: true,
+          submittedBy: { select: { username: true } },
         },
       },
     },

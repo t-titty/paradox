@@ -52,6 +52,7 @@ paradoxRouter.get("/today", requireAuth, async (req, res, next) => {
         optionB: true,
         category: true,
         airDate: true,
+        submittedBy: { select: { username: true } },
       },
     });
 

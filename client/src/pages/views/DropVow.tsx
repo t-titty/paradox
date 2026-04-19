@@ -75,6 +75,11 @@ function VowForm({ paradox, onVoted }: { paradox: Paradox; onVoted: () => void }
         <h1 className="brutal-heading mt-3 text-4xl leading-tight text-bone md:text-6xl lg:text-7xl lg:leading-none">
           {paradox.title.toUpperCase()}
         </h1>
+        {paradox.submittedBy && (
+          <p className="mt-2 font-mono text-sm uppercase tracking-brutal text-gold">
+            SUBMITTED BY @{paradox.submittedBy.username}
+          </p>
+        )}
         <p className="mt-6 max-w-3xl font-mono text-base leading-relaxed text-bone md:mt-8 md:text-lg">
           {paradox.description}
         </p>
@@ -227,7 +232,16 @@ function LockedVow({
 }) {
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-8 px-4 py-10 md:px-6 md:py-16">
-      <h1 className="brutal-heading text-4xl text-bone md:text-5xl lg:text-6xl">{paradox.title.toUpperCase()}</h1>
+      <div>
+        <h1 className="brutal-heading text-4xl text-bone md:text-5xl lg:text-6xl">
+          {paradox.title.toUpperCase()}
+        </h1>
+        {paradox.submittedBy && (
+          <p className="mt-2 font-mono text-sm uppercase tracking-brutal text-gold">
+            SUBMITTED BY @{paradox.submittedBy.username}
+          </p>
+        )}
+      </div>
       <div className="brutal-card-gold">
         <p className="brutal-heading text-sm text-gold">YOU HAVE VOWED.</p>
         <p className="mt-2 font-mono text-xs uppercase tracking-brutal text-muted">

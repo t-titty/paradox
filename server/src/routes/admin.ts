@@ -202,6 +202,7 @@ adminRouter.post("/submissions/:id/approve", async (req, res, next) => {
         optionB: submission.optionB,
         category: submission.category,
         airDate,
+        submittedById: submission.userId,
       },
     });
     await prisma.submittedParadox.update({

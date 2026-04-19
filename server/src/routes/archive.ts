@@ -50,11 +50,29 @@ archiveRouter.get("/", async (req, res, next) => {
         tribeB: true,
         synthesisText: true,
         signedAt: true,
+        // SynthesisArchive stores paradoxTitle as a string; follow the
+        // Duel → Paradox edge to recover submitter attribution.
+        duel: {
+          select: {
+            paradox: {
+              select: { submittedBy: { select: { username: true } } },
+            },
+          },
+        },
       },
     });
 
     const hasMore = entries.length > q.limit;
     const page = hasMore ? entries.slice(0, q.limit) : entries;
+    const pageShaped = page.map((e) => ({
+      id: e.id,
+      paradoxTitle: e.paradoxTitle,
+      tribeA: e.tribeA,
+      tribeB: e.tribeB,
+      synthesisText: e.synthesisText,
+      signedAt: e.signedAt,
+      submittedBy: e.duel?.paradox?.submittedBy ?? null,
+    }));
     const nextCursor = hasMore ? page[page.length - 1]!.id : null;
 
     // Facets — paradoxes and tribes that have at least one entry.
@@ -72,7 +90,7 @@ archiveRouter.get("/", async (req, res, next) => {
     ]);
 
     res.json({
-      entries: page,
+      entries: pageShaped,
       nextCursor,
       facets: {
         paradoxTitles: paradoxFacet.map((p) => ({ title: p.paradoxTitle, count: p._count._all })),

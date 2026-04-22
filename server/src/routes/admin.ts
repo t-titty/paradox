@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../db.js";
+import { env } from "../env.js";
 import { requireAdmin } from "../middleware/auth.js";
 import { HttpError } from "../middleware/error.js";
 import { parseYmd, ymd } from "../phases.js";
@@ -272,6 +273,7 @@ adminRouter.get("/users", async (_req, res, next) => {
         isAdmin: true,
         isBanned: true,
         isGrantedCircleAccess: true,
+        testMode: true,
         createdAt: true,
         tribeHistory: {
           orderBy: { airDate: "desc" },
@@ -328,6 +330,42 @@ adminRouter.post("/users/:id/grant-circle-access", async (req, res, next) => {
       where: { id: req.params.id },
       data: { isGrantedCircleAccess: granted },
       select: { id: true, username: true, isGrantedCircleAccess: true },
+    });
+    res.json({ user });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// Developer Controls
+// ──────────────────────────────────────────────────────────────────────────
+
+/**
+ * GET /api/admin/developer
+ * Reports system-level developer switches so the admin panel can show
+ * whether platform-wide test mode is on (i.e. TEST_MODE env var set on
+ * Railway). Per-user testMode status comes from the /users endpoint.
+ */
+adminRouter.get("/developer", (_req, res) => {
+  res.json({ systemTestMode: env.TEST_MODE });
+});
+
+const testModeSchema = z.object({ enabled: z.boolean() });
+
+/**
+ * POST /api/admin/users/:id/test-mode
+ * Per-user test-mode toggle. Unlocks phase switching, date-check bypass,
+ * and the banner for that user only. Combined with env.TEST_MODE via
+ * `effectiveTestMode` (OR) at request time.
+ */
+adminRouter.post("/users/:id/test-mode", async (req, res, next) => {
+  try {
+    const { enabled } = testModeSchema.parse(req.body);
+    const user = await prisma.user.update({
+      where: { id: req.params.id },
+      data: { testMode: enabled },
+      select: { id: true, username: true, testMode: true },
     });
     res.json({ user });
   } catch (e) {

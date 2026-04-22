@@ -1,9 +1,9 @@
 import { Router } from "express";
 import { prisma } from "../db.js";
-import { env } from "../env.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { HttpError } from "../middleware/error.js";
 import { parseYmd, resolvePhase } from "../phases.js";
+import { effectiveTestMode } from "../lib/testMode.js";
 import { sortIntoTribe, TRIBES, type TribeName } from "../lib/oracle.js";
 
 export const sortRouter = Router();
@@ -22,11 +22,15 @@ export const sortRouter = Router();
 sortRouter.get("/me", requireAuth, async (req, res, next) => {
   try {
     const { userId } = req as AuthedRequest;
-    const phase = resolvePhase();
+    const basePhase = resolvePhase();
+    const testMode = await effectiveTestMode(userId);
+    // Stamp the caller's effective testMode onto the phase so the client
+    // banner / "SORT ME NOW" button render per-user, not by system env.
+    const phase = { ...basePhase, testMode };
     const airDate = parseYmd(phase.today);
 
     // Test mode: "Sort Me Now" — skip the phase gate entirely.
-    if (!env.TEST_MODE && (phase.phase === "vow" || phase.phase === "bridge")) {
+    if (!testMode && (phase.phase === "vow" || phase.phase === "bridge")) {
       throw new HttpError(425, "Sorting begins after the Vow closes.", "phase_early");
     }
 

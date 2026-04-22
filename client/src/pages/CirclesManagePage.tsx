@@ -222,7 +222,32 @@ function CircleListView() {
       ) : (
         <AccessGate />
       )}
+
+      <ColosseumSection />
     </Shell>
+  );
+}
+
+function ColosseumSection() {
+  return (
+    <section className="border-2 border-gold p-5 md:p-6">
+      <p className="brutal-heading text-xs text-gold">PARTY MODE</p>
+      <h2 className="brutal-heading mt-3 text-3xl text-bone md:text-4xl">
+        THE COLOSSEUM.
+      </h2>
+      <p className="mt-3 max-w-2xl font-mono text-sm text-bone md:text-base">
+        Cast the dilemma to your TV. Vote on your phones. Debate in person.
+        A live party game running on top of your circle.
+      </p>
+      <p className="mt-3 font-mono text-xs uppercase tracking-brutal text-muted">
+        FREE: 1 SESSION PER DAY · PARTY PRO: UNLIMITED
+      </p>
+      <div className="mt-5">
+        <Link to="/party" className="brutal-btn brutal-btn-gold inline-block">
+          START A PARTY
+        </Link>
+      </div>
+    </section>
   );
 }
 

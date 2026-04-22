@@ -165,11 +165,8 @@ export function CirclesPage() {
           </article>
         </div>
 
-        <div className="mt-6 flex flex-wrap gap-3">
-          <Link to="/party" className="brutal-btn brutal-btn-gold">
-            START A PARTY
-          </Link>
-          <Link to="/pricing" className="brutal-btn">
+        <div className="mt-6">
+          <Link to="/pricing" className="brutal-btn brutal-btn-gold inline-block">
             VIEW PRICING
           </Link>
         </div>

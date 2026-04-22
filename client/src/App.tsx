@@ -17,6 +17,7 @@ import { TermsPage } from "./pages/TermsPage.tsx";
 import { HowToPlayPage } from "./pages/HowToPlayPage.tsx";
 import { CirclesManagePage } from "./pages/CirclesManagePage.tsx";
 import { JoinCirclePage } from "./pages/JoinCirclePage.tsx";
+import { PartyPage } from "./pages/PartyPage.tsx";
 import { PricingPage } from "./pages/PricingPage.tsx";
 import { PricingSuccessPage } from "./pages/PricingSuccessPage.tsx";
 import { PricingCancelPage } from "./pages/PricingCancelPage.tsx";
@@ -137,6 +138,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <JoinCirclePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/party"
+            element={
+              <ProtectedRoute>
+                <PartyPage />
               </ProtectedRoute>
             }
           />

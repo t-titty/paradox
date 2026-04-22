@@ -1,12 +1,12 @@
-import { useMemo, useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { api, errorMessage } from "../lib/api.ts";
 import { useAuth } from "../context/AuthContext.tsx";
 import {
   BILLING_OPTIONS,
-  PRICING_PLANS,
   TAB_ORDER,
   amountFor,
+  billingsFor,
   formatDollars,
   lookupKeyFor,
   periodSuffix,
@@ -16,13 +16,49 @@ import {
   type PricingPlan,
 } from "../lib/pricing.ts";
 
+// Map the human-friendly `?tab=` URL param to a CircleTypeKey so we can
+// deep-link into the Personal tab from the /circles marketing page. Unknown
+// values fall through to the default tab (JUNIOR_HIGH).
+const QUERY_TAB_TO_KEY: Record<string, CircleTypeKey> = {
+  personal: "DEN",
+  den: "DEN",
+  "jr-high": "JUNIOR_HIGH",
+  "junior-high": "JUNIOR_HIGH",
+  "high-school": "HIGH_SCHOOL",
+  university: "UNIVERSITY",
+  corporate: "CORPORATE",
+};
+
 export function PricingPage() {
   const { user } = useAuth();
-  const [tab, setTab] = useState<CircleTypeKey>("JUNIOR_HIGH");
+  const [params] = useSearchParams();
+  const initialTab = useMemo<CircleTypeKey>(() => {
+    const raw = params.get("tab")?.toLowerCase();
+    return raw && QUERY_TAB_TO_KEY[raw] ? QUERY_TAB_TO_KEY[raw] : "JUNIOR_HIGH";
+  }, [params]);
+  const [tab, setTab] = useState<CircleTypeKey>(initialTab);
   const [billing, setBilling] = useState<Billing>("monthly");
   const [checkoutPlan, setCheckoutPlan] = useState<PricingPlan | null>(null);
 
   const plans = useMemo(() => plansByType(tab), [tab]);
+
+  // Billing intervals this tab actually offers. All plans in a tab share
+  // offered billings today, so we read from the first plan; fall back to
+  // all three if the tab is somehow empty.
+  const availableBillings = useMemo<readonly Billing[]>(() => {
+    return plans[0]
+      ? billingsFor(plans[0])
+      : (["monthly", "6month", "annual"] as const);
+  }, [plans]);
+
+  // If the user switches to a tab that doesn't offer the current billing
+  // interval (e.g. from Corporate 6-month → Personal), snap back to monthly
+  // instead of silently picking a bogus lookup key at checkout.
+  useEffect(() => {
+    if (!availableBillings.includes(billing)) {
+      setBilling("monthly");
+    }
+  }, [availableBillings, billing]);
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-10 px-4 py-10 md:px-6 md:py-16">
@@ -68,12 +104,12 @@ export function PricingPage() {
         ))}
       </nav>
 
-      {/* billing toggle */}
+      {/* billing toggle — filtered to the intervals this tab actually offers */}
       <div className="flex flex-wrap items-center gap-2">
         <span className="font-mono text-xs uppercase tracking-brutal text-muted">
           BILLING:
         </span>
-        {BILLING_OPTIONS.map((b) => (
+        {BILLING_OPTIONS.filter((b) => availableBillings.includes(b.key)).map((b) => (
           <button
             key={b.key}
             type="button"
@@ -247,12 +283,18 @@ function CheckoutModal({
         </div>
 
         <label className="flex flex-col gap-1">
-          <span className="brutal-heading text-xs text-muted">ORGANIZATION NAME</span>
+          <span className="brutal-heading text-xs text-muted">
+            {plan.circleType === "DEN" ? "DEN NAME" : "ORGANIZATION NAME"}
+          </span>
           <input
             className="brutal-input"
             value={orgName}
             onChange={(e) => setOrgName(e.target.value)}
-            placeholder="E.G. LINCOLN HIGH SCHOOL"
+            placeholder={
+              plan.circleType === "DEN"
+                ? "E.G. THE SMITHS"
+                : "E.G. LINCOLN HIGH SCHOOL"
+            }
             required
             minLength={2}
             maxLength={80}
@@ -260,7 +302,9 @@ function CheckoutModal({
           />
         </label>
         <p className="font-mono text-xs uppercase tracking-brutal text-muted">
-          This becomes the name of your Circle. You can rename games inside it later.
+          {plan.circleType === "DEN"
+            ? "This becomes the name of your Den. You can rename it later."
+            : "This becomes the name of your Circle. You can rename games inside it later."}
         </p>
 
         {!user && (

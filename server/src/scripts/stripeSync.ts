@@ -14,8 +14,19 @@
  * Idempotent: safe to run repeatedly. A no-op run for an already-synced
  * catalogue makes no API writes.
  */
-import { PRICING_PLANS, lookupKeyFor, amountFor, recurringFor, type Billing } from "../lib/pricing.js";
+import {
+  PRICING_PLANS,
+  billingsFor,
+  lookupKeyFor,
+  amountFor,
+  recurringFor,
+} from "../lib/pricing.js";
 import { requireStripe } from "../lib/stripe.js";
+
+// $4.99 * 100 === 498.99999... in JS floats; Math.round keeps cents exact.
+function usdToCents(usd: number): number {
+  return Math.round(usd * 100);
+}
 
 async function main() {
   const stripe = requireStripe();
@@ -66,17 +77,19 @@ async function main() {
   // Fetch all desired lookup keys in one sweep (Stripe caps at 10 per call).
   const desired: {
     plan: (typeof PRICING_PLANS)[number];
-    billing: Billing;
+    billing: ReturnType<typeof billingsFor>[number];
     lookupKey: string;
     amountCents: number;
   }[] = [];
   for (const plan of PRICING_PLANS) {
-    for (const billing of ["monthly", "6month", "annual"] as Billing[]) {
+    // Skip billing intervals a plan doesn't offer (e.g. Dens have no
+    // 6-month SKU) so we don't mint unreachable Stripe prices.
+    for (const billing of billingsFor(plan)) {
       desired.push({
         plan,
         billing,
         lookupKey: lookupKeyFor(plan.key, billing),
-        amountCents: amountFor(plan, billing) * 100,
+        amountCents: usdToCents(amountFor(plan, billing)),
       });
     }
   }

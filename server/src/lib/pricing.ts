@@ -16,7 +16,12 @@
 
 export type Billing = "monthly" | "6month" | "annual";
 
-export type CircleTypeKey = "JUNIOR_HIGH" | "HIGH_SCHOOL" | "UNIVERSITY" | "CORPORATE";
+export type CircleTypeKey =
+  | "JUNIOR_HIGH"
+  | "HIGH_SCHOOL"
+  | "UNIVERSITY"
+  | "CORPORATE"
+  | "DEN";
 
 export interface PricingPlan {
   key: string;
@@ -26,10 +31,21 @@ export interface PricingPlan {
   // null means "unlimited" (CORPORATE_ENTERPRISE).
   seatLimit: number | null;
   popular: boolean;
+  // USD amounts; may be fractional (e.g. 4.99). Converted via
+  // Math.round(value * 100) at the Stripe boundary to avoid float drift.
   monthly: number;
   sixMonth: number;
   annual: number;
   features: string[];
+  // Billing intervals this plan offers. Defaults to all three. Dens only
+  // offer monthly + annual so the 6-month SKU is never synced or shown.
+  offeredBillings?: Billing[];
+}
+
+const DEFAULT_BILLINGS: readonly Billing[] = ["monthly", "6month", "annual"];
+
+export function billingsFor(plan: PricingPlan): readonly Billing[] {
+  return plan.offeredBillings ?? DEFAULT_BILLINGS;
 }
 
 /* ---------- the 12 plans ---------- */
@@ -246,6 +262,47 @@ export const PRICING_PLANS: PricingPlan[] = [
       "Dedicated support",
     ],
   },
+
+  // DEN — Friend & family. Monthly + annual only (no 6-month). `sixMonth`
+  // is set to 0 but `offeredBillings` excludes it so nothing ever resolves
+  // a 6-month Den lookup key.
+  {
+    key: "DEN_STARTER",
+    circleType: "DEN",
+    tierName: "Starter",
+    tabLabel: "Den",
+    seatLimit: 5,
+    popular: false,
+    monthly: 4.99,
+    sixMonth: 0,
+    annual: 39,
+    offeredBillings: ["monthly", "annual"],
+    features: [
+      "Up to 5 members",
+      "Private matchmaking",
+      "Shared synthesis archive",
+      "Group tribe leaderboard",
+      "Invite via shareable link",
+    ],
+  },
+  {
+    key: "DEN_PLUS",
+    circleType: "DEN",
+    tierName: "Plus",
+    tabLabel: "Den",
+    seatLimit: 15,
+    popular: true,
+    monthly: 9.99,
+    sixMonth: 0,
+    annual: 79,
+    offeredBillings: ["monthly", "annual"],
+    features: [
+      "Everything in Starter",
+      "Up to 15 members",
+      "Den Stats dashboard",
+      "Full session history",
+    ],
+  },
 ];
 
 /* ---------- helpers ---------- */
@@ -284,7 +341,7 @@ export function resolveLookupKey(
   lookupKey: string,
 ): { plan: PricingPlan; billing: Billing } | undefined {
   for (const plan of PRICING_PLANS) {
-    for (const billing of ["monthly", "6month", "annual"] as Billing[]) {
+    for (const billing of billingsFor(plan)) {
       if (lookupKeyFor(plan.key, billing) === lookupKey) {
         return { plan, billing };
       }
@@ -294,5 +351,5 @@ export function resolveLookupKey(
 }
 
 export const ALL_LOOKUP_KEYS: string[] = PRICING_PLANS.flatMap((p) =>
-  (["monthly", "6month", "annual"] as Billing[]).map((b) => lookupKeyFor(p.key, b)),
+  billingsFor(p).map((b) => lookupKeyFor(p.key, b)),
 );

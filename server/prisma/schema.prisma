@@ -37,6 +37,9 @@ enum CircleType {
   HIGH_SCHOOL
   UNIVERSITY
   CORPORATE
+  // Friend & family Dens — lightweight personal circles sharing the Circle
+  // table. Rendered with a simplified dashboard on the client.
+  DEN
 }
 
 enum MembershipRole {

@@ -7,7 +7,12 @@
 
 export type Billing = "monthly" | "6month" | "annual";
 
-export type CircleTypeKey = "JUNIOR_HIGH" | "HIGH_SCHOOL" | "UNIVERSITY" | "CORPORATE";
+export type CircleTypeKey =
+  | "JUNIOR_HIGH"
+  | "HIGH_SCHOOL"
+  | "UNIVERSITY"
+  | "CORPORATE"
+  | "DEN";
 
 export interface PricingPlan {
   key: string;
@@ -20,6 +25,15 @@ export interface PricingPlan {
   sixMonth: number;
   annual: number;
   features: string[];
+  /** Billing intervals this plan offers. Defaults to all three. Dens
+   *  skip 6-month. */
+  offeredBillings?: Billing[];
+}
+
+const DEFAULT_BILLINGS: readonly Billing[] = ["monthly", "6month", "annual"];
+
+export function billingsFor(plan: PricingPlan): readonly Billing[] {
+  return plan.offeredBillings ?? DEFAULT_BILLINGS;
 }
 
 export const PRICING_PLANS: PricingPlan[] = [
@@ -234,6 +248,45 @@ export const PRICING_PLANS: PricingPlan[] = [
       "Dedicated support",
     ],
   },
+
+  // DEN — Friend & family. Monthly + annual only.
+  {
+    key: "DEN_STARTER",
+    circleType: "DEN",
+    tierName: "Starter",
+    tabLabel: "Den",
+    seatLimit: 5,
+    popular: false,
+    monthly: 4.99,
+    sixMonth: 0,
+    annual: 39,
+    offeredBillings: ["monthly", "annual"],
+    features: [
+      "Up to 5 members",
+      "Private matchmaking",
+      "Shared synthesis archive",
+      "Group tribe leaderboard",
+      "Invite via shareable link",
+    ],
+  },
+  {
+    key: "DEN_PLUS",
+    circleType: "DEN",
+    tierName: "Plus",
+    tabLabel: "Den",
+    seatLimit: 15,
+    popular: true,
+    monthly: 9.99,
+    sixMonth: 0,
+    annual: 79,
+    offeredBillings: ["monthly", "annual"],
+    features: [
+      "Everything in Starter",
+      "Up to 15 members",
+      "Den Stats dashboard",
+      "Full session history",
+    ],
+  },
 ];
 
 export function lookupKeyFor(planKey: string, billing: Billing): string {
@@ -250,6 +303,7 @@ export function plansByType(type: CircleTypeKey): PricingPlan[] {
 }
 
 export const TAB_ORDER: { key: CircleTypeKey; label: string }[] = [
+  { key: "DEN", label: "Personal" },
   { key: "JUNIOR_HIGH", label: "Jr. High" },
   { key: "HIGH_SCHOOL", label: "High School" },
   { key: "UNIVERSITY", label: "University" },

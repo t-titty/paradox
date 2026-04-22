@@ -7,6 +7,7 @@ import { validateJustification } from "../lib/sentence.js";
 import { containsProfanity } from "../lib/profanity.js";
 import { classifyShift } from "../lib/throwback.js";
 import { resolvePhase } from "../phases.js";
+import { effectiveTestMode } from "../lib/testMode.js";
 
 export const throwbackRouter = Router();
 
@@ -27,7 +28,8 @@ throwbackRouter.post("/", requireAuth, async (req, res, next) => {
     const { originalVoteId, newChoice, newJustification } = revoteSchema.parse(req.body);
 
     const phase = resolvePhase();
-    if (phase.phase !== "vow") {
+    const testMode = await effectiveTestMode(userId);
+    if (!testMode && phase.phase !== "vow") {
       throw new HttpError(403, "Revisits are closed outside the Vow window.", "phase_locked");
     }
 

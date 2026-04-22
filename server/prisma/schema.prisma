@@ -69,6 +69,11 @@ model User {
   // Admin-granted bypass for the Circle creation paywall. Paid subscribers
   // are gated via Circle.subscriptionStatus instead.
   isGrantedCircleAccess Boolean @default(false)
+  // Admin-granted per-user test mode. Unlocks phase switching, date-check
+  // bypass, and the test-mode banner for this user only. Combined with the
+  // system-wide env.TEST_MODE by `effectiveTestMode` (OR). Invisible to
+  // regular users — the toggle lives in the admin Developer panel.
+  testMode       Boolean  @default(false)
   createdAt      DateTime @default(now())
 
   votes            Vote[]

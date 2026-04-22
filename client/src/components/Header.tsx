@@ -1,11 +1,10 @@
 import { useState } from "react";
 import { Link, NavLink } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.tsx";
-import { useTestMode } from "../context/TestModeContext.tsx";
 
 export function Header() {
   const { user, logout } = useAuth();
-  const { testMode } = useTestMode();
+  const testMode = Boolean(user?.testMode);
   const [open, setOpen] = useState(false);
 
   function closeMenu() {

@@ -8,6 +8,7 @@ import { HttpError } from "../middleware/error.js";
 import { requireAuth, signToken, type AuthedRequest } from "../middleware/auth.js";
 import { containsProfanity } from "../lib/profanity.js";
 import { userHasCircleAccess, userOwnsOrAdminsCircle } from "../lib/circleAccess.js";
+import { env } from "../env.js";
 
 export const authRouter = Router();
 
@@ -38,7 +39,9 @@ const totpCodeSchema = z.object({
   code: z.string().regex(/^\d{6}$/, "Code must be 6 digits"),
 });
 
-// Shape returned in every auth-issuing response.
+// Shape returned in every auth-issuing response. `testMode` is selected
+// from the DB so we can compute the effective flag inline (system env OR
+// per-user flag) without a second query.
 const userSelect = {
   id: true,
   username: true,
@@ -48,6 +51,7 @@ const userSelect = {
   isPremium: true,
   isAdmin: true,
   twoFactorEnabled: true,
+  testMode: true,
 } as const;
 
 type MeUser = {
@@ -59,18 +63,25 @@ type MeUser = {
   isPremium: boolean;
   isAdmin: boolean;
   twoFactorEnabled: boolean;
+  testMode: boolean;
 };
 
-// Wrap the DB row with derived circle flags so the client can render the
-// paywall CTA and gate the MANAGE nav without a second request.
-// `hasCircleAccess` governs *creation*; `ownsOrAdminsCircle` governs nav
-// visibility (shown only to users with circles they can actually manage).
+// Wrap the DB row with derived circle flags + effective test mode so the
+// client can render the paywall CTA, gate the MANAGE nav, and show the
+// test-mode banner without a second request. The outgoing `testMode`
+// replaces the raw column: it's `env.TEST_MODE || user.testMode`, which is
+// what every UI decision wants.
 async function withAccessFlags<T extends MeUser>(user: T) {
   const [hasCircleAccess, ownsOrAdminsCircle] = await Promise.all([
     userHasCircleAccess(user.id),
     userOwnsOrAdminsCircle(user.id),
   ]);
-  return { ...user, hasCircleAccess, ownsOrAdminsCircle };
+  return {
+    ...user,
+    hasCircleAccess,
+    ownsOrAdminsCircle,
+    testMode: env.TEST_MODE || user.testMode,
+  };
 }
 
 function verifyTotp(secret: string, token: string): boolean {
@@ -154,6 +165,7 @@ authRouter.post("/login", async (req, res, next) => {
         isPremium: user.isPremium,
         isAdmin: user.isAdmin,
         twoFactorEnabled: user.twoFactorEnabled,
+        testMode: user.testMode,
       }),
       token: signToken(user.id, rememberMe),
     });

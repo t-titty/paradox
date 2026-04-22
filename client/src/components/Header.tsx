@@ -34,6 +34,7 @@ export function Header() {
         <div className="hidden flex-1 items-center justify-between gap-8 md:flex">
           <nav className="flex items-center gap-5 font-mono text-xs uppercase tracking-brutal">
             {user && <Nav to="/">TODAY</Nav>}
+            <Nav to="/how-to-play">HOW TO PLAY</Nav>
             <Nav to="/archive">ARCHIVE</Nav>
             {user && <Nav to="/profile">PROFILE</Nav>}
             {user && <Nav to="/library">LIBRARY</Nav>}
@@ -74,6 +75,7 @@ export function Header() {
         <div className="flex flex-col border-t-2 border-bone md:hidden">
           <nav className="flex flex-col font-mono text-sm uppercase tracking-brutal">
             {user && <MobileNav to="/" onClick={closeMenu}>TODAY</MobileNav>}
+            <MobileNav to="/how-to-play" onClick={closeMenu}>HOW TO PLAY</MobileNav>
             <MobileNav to="/archive" onClick={closeMenu}>ARCHIVE</MobileNav>
             {user && <MobileNav to="/profile" onClick={closeMenu}>PROFILE</MobileNav>}
             {user && <MobileNav to="/library" onClick={closeMenu}>LIBRARY</MobileNav>}

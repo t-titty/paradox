@@ -65,8 +65,16 @@ app.use(
           "https://checkout.stripe.com",
         ],
         "img-src": ["'self'", "data:"],
-        "style-src": ["'self'", "'unsafe-inline'"],
-        "font-src": ["'self'", "data:"],
+        "style-src": [
+          "'self'",
+          "'unsafe-inline'",
+          "https://fonts.googleapis.com",
+        ],
+        "font-src": [
+          "'self'",
+          "data:",
+          "https://fonts.gstatic.com",
+        ],
         "object-src": ["'none'"],
         "base-uri": ["'self'"],
         "form-action": ["'self'", "https://checkout.stripe.com"],
@@ -116,6 +124,23 @@ app.use("/api/webhooks/stripe", stripeWebhookRouter);
 
 app.use(express.json({ limit: "64kb" }));
 
+// In production, resolve the built client path so both the static asset
+// middleware (mounted next) and the SPA catch-all (mounted last) share it.
+// At runtime this file is server/dist/index.js, so client/dist is ../../.
+const clientDist =
+  env.NODE_ENV === "production"
+    ? path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../client/dist")
+    : null;
+
+// Serve hashed bundles (/assets/*) and other built files BEFORE any API
+// routes or the catch-all, so express.static sets the right MIME type
+// (text/css, application/javascript, etc.) and doesn't fall through to the
+// error handler. `fallthrough: true` is the default — unknown paths still
+// continue to the API routes below.
+if (clientDist) {
+  app.use(express.static(clientDist, { index: false }));
+}
+
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, env: env.NODE_ENV, testMode: env.TEST_MODE });
 });
@@ -138,15 +163,9 @@ app.use("/api/feedback", generalLimiter, feedbackRouter);
 app.use("/api/submissions", generalLimiter, submissionsRouter);
 app.use("/api/admin", generalLimiter, adminRouter);
 
-// In production, serve the built client from the same origin. The client
-// is built to client/dist; at runtime this file is server/dist/index.js,
-// so the path is ../../client/dist.
-if (env.NODE_ENV === "production") {
-  const here = path.dirname(fileURLToPath(import.meta.url));
-  const clientDist = path.resolve(here, "../../client/dist");
-  app.use(express.static(clientDist));
-  // SPA fallback. Anything that isn't an /api or /socket.io request falls
-  // through to index.html so client-side routes work on refresh.
+// SPA fallback. Anything that isn't an /api or /socket.io request falls
+// through to index.html so client-side routes work on refresh.
+if (clientDist) {
   app.get(/^\/(?!api\/|socket\.io\/).*/, (_req, res) => {
     res.sendFile(path.join(clientDist, "index.html"));
   });

@@ -6,6 +6,8 @@ import { ProtectedRoute } from "./components/ProtectedRoute.tsx";
 import { CirclesManageGuard } from "./components/CirclesManageGuard.tsx";
 import { LoginPage } from "./pages/LoginPage.tsx";
 import { RegisterPage } from "./pages/RegisterPage.tsx";
+import { ForgotPasswordPage } from "./pages/ForgotPasswordPage.tsx";
+import { ResetPasswordPage } from "./pages/ResetPasswordPage.tsx";
 import { TodayPage } from "./pages/TodayPage.tsx";
 import { ArchivePage } from "./pages/ArchivePage.tsx";
 import { LibraryPage } from "./pages/LibraryPage.tsx";
@@ -45,6 +47,8 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
 
           {/* Public */}
           <Route path="/archive" element={<ArchivePage />} />

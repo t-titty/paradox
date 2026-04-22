@@ -37,6 +37,9 @@ enum CircleType {
   HIGH_SCHOOL
   UNIVERSITY
   CORPORATE
+  // Friend & family Dens — lightweight personal circles. Share the Circle
+  // table but render a simplified dashboard on the client.
+  DEN
 }
 
 enum MembershipRole {
@@ -52,6 +55,21 @@ enum ParadoxPackage {
   HIGH_SCHOOL
   UNIVERSITY
   CORPORATE
+}
+
+// Lifecycle of a live Colosseum party session.
+enum PartySessionStatus {
+  LOBBY
+  VOTING
+  REVEAL
+  ENDED
+}
+
+// Which kind of one-time (non-subscription) product a purchase represents.
+// Kept as a small enum rather than free-form strings so TypeScript can
+// exhaustively handle new product classes as we add them.
+enum OneTimeProduct {
+  PARTY_PRO_LIFETIME
 }
 
 model User {
@@ -82,6 +100,12 @@ model User {
   ownedCircles       Circle[]           @relation("CircleOwner")
   circleMemberships  CircleMembership[]
   inviteCodesCreated CircleInviteCode[] @relation("InviteCreator")
+
+  partySessionsHosted PartySession[]      @relation("PartySessionHost")
+  partyVotes          PartyVote[]
+  partyPlayers        PartyPlayer[]
+  oneTimePurchases    OneTimePurchase[]
+  partyPackPurchases  PartyPackPurchase[]
 }
 
 model Paradox {
@@ -104,6 +128,7 @@ model Paradox {
   duels            Duel[]
   tribeHistory     TribeHistory[]
   throwbackRevotes ThrowbackRevote[]
+  partySessions    PartySession[]
 
   @@index([submittedById])
 }
@@ -373,4 +398,111 @@ model CircleParadoxPack {
   package   ParadoxPackage @unique
   paradoxes Json
   updatedAt DateTime       @updatedAt
+}
+
+// ---------- Colosseum (Party Mode) ------------------------------------
+// Live, in-person party game. Distinct from the daily PARADOX loop — a
+// session is ephemeral (hours, not weeks), keyed on a short roomCode rather
+// than a membership, and spans a single paradox with its own vote set.
+// Votes are NOT written back to the main Vote table — the whole session is
+// a separate audience-driven experience — but the party history is queryable
+// per-user for profile display.
+model PartySession {
+  id        String             @id @default(cuid())
+  hostId    String
+  // 6-char uppercase code shown on the cast screen and entered at /join.
+  // Globally unique for the lifetime of the row; expired codes stay
+  // reserved so replays and share links remain unambiguous.
+  roomCode  String             @unique
+  // Chosen by the host after lobby. Null while status=LOBBY.
+  paradoxId String?
+  status    PartySessionStatus @default(LOBBY)
+  createdAt DateTime           @default(now())
+  endedAt   DateTime?
+
+  host    User        @relation("PartySessionHost", fields: [hostId], references: [id], onDelete: Cascade)
+  paradox Paradox?    @relation(fields: [paradoxId], references: [id], onDelete: SetNull)
+  votes   PartyVote[]
+  players PartyPlayer[]
+
+  @@index([hostId, createdAt])
+  @@index([status])
+}
+
+model PartyVote {
+  id            String   @id @default(cuid())
+  sessionId     String
+  userId        String
+  choice        Choice
+  justification String
+  createdAt     DateTime @default(now())
+
+  session PartySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, userId])
+  @@index([sessionId])
+  @@index([userId])
+}
+
+model PartyPlayer {
+  id          String   @id @default(cuid())
+  sessionId   String
+  userId      String
+  // Party-specific alias shown on screen; distinct from User.username so
+  // players can use a fun name for a single night without touching their
+  // profile.
+  displayName String
+  joinedAt    DateTime @default(now())
+
+  session PartySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, userId])
+  @@index([sessionId])
+}
+
+// ---------- One-time purchases ----------------------------------------
+// Flat audit table for non-subscription purchases (lifetime unlocks, etc.).
+// We keep Stripe's chargeId *and* paymentIntentId so refunds can be
+// reconciled either way, and so repeated webhook deliveries for the same
+// PI are idempotent via the unique stripePaymentIntentId.
+model OneTimePurchase {
+  id                    String         @id @default(cuid())
+  userId                String
+  product               OneTimeProduct
+  stripeChargeId        String?
+  stripePaymentIntentId String?        @unique
+  amountCents           Int
+  currency              String         @default("usd")
+  createdAt             DateTime       @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // A user can own a given product at most once. If they double-purchase,
+  // the webhook ignores the second on this conflict.
+  @@unique([userId, product])
+  @@index([userId])
+}
+
+// Party pack content unlocks, one row per (user, pack). Kept separate from
+// OneTimePurchase because packs are a high-cardinality content catalogue
+// keyed by slug, whereas OneTimeProduct is a low-cardinality enum.
+model PartyPackPurchase {
+  id                    String   @id @default(cuid())
+  userId                String
+  // Free-form slug keyed to the server pack catalogue (e.g. "HOLIDAY",
+  // "DATE_NIGHT"). String rather than enum so adding packs doesn't require
+  // a schema migration.
+  packSlug              String
+  stripeChargeId        String?
+  stripePaymentIntentId String?  @unique
+  amountCents           Int
+  currency              String   @default("usd")
+  createdAt             DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, packSlug])
+  @@index([userId])
 }

@@ -66,6 +66,9 @@ model User {
   isBanned       Boolean  @default(false)
   twoFactorSecret   String?
   twoFactorEnabled  Boolean  @default(false)
+  // Admin-granted bypass for the Circle creation paywall. Paid subscribers
+  // are gated via Circle.subscriptionStatus instead.
+  isGrantedCircleAccess Boolean @default(false)
   createdAt      DateTime @default(now())
 
   votes            Vote[]

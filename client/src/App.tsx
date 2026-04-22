@@ -17,6 +17,7 @@ import { TermsPage } from "./pages/TermsPage.tsx";
 import { HowToPlayPage } from "./pages/HowToPlayPage.tsx";
 import { CirclesManagePage } from "./pages/CirclesManagePage.tsx";
 import { JoinCirclePage } from "./pages/JoinCirclePage.tsx";
+import { PricingPage } from "./pages/PricingPage.tsx";
 
 // ProfilePage pulls in Three.js + r3f (heavy). Code-split it so only users
 // who visit /profile/* pay the download cost.
@@ -46,6 +47,7 @@ export default function App() {
           {/* Public */}
           <Route path="/archive" element={<ArchivePage />} />
           <Route path="/circles" element={<CirclesPage />} />
+          <Route path="/pricing" element={<PricingPage />} />
           <Route path="/terms" element={<TermsPage />} />
           <Route path="/how-to-play" element={<HowToPlayPage />} />
 

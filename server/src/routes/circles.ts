@@ -4,6 +4,7 @@ import crypto from "node:crypto";
 import { prisma } from "../db.js";
 import { HttpError } from "../middleware/error.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
+import { userHasCircleAccess } from "../lib/circleAccess.js";
 
 export const circlesRouter = Router();
 
@@ -120,6 +121,19 @@ const createInviteSchema = z.object({
 circlesRouter.post("/", requireAuth, async (req, res, next) => {
   try {
     const { userId } = req as AuthedRequest;
+
+    // Paywall: block creation unless the user is admin-granted or has an
+    // active paid subscription. Admins can still toggle the grant per-user
+    // from the admin panel for beta/testing.
+    const allowed = await userHasCircleAccess(userId);
+    if (!allowed) {
+      throw new HttpError(
+        403,
+        "A paid plan or admin grant is required to create a Circle.",
+        "circle_access_required",
+      );
+    }
+
     const body = createCircleSchema.parse(req.body);
 
     const circle = await prisma.circle.create({

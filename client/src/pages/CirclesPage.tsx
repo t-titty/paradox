@@ -1,131 +1,123 @@
-import { useState, type FormEvent } from "react";
-import { api, errorMessage } from "../lib/api.ts";
+import { Link } from "react-router-dom";
 
 /**
- * Private Circles application stub. Collects organization + contact and
- * logs it to the DB for manual follow-up. No admin UI yet.
+ * Public landing for Private Circles. Explains the three tier bands and sends
+ * visitors to /pricing to actually subscribe. Replaces the old email-based
+ * application form — the Stripe pass handles payment end-to-end.
  */
 export function CirclesPage() {
-  const [organization, setOrganization] = useState("");
-  const [kind, setKind] = useState<
-    "JUNIOR_HIGH" | "HIGH_SCHOOL" | "UNIVERSITY" | "COMPANY"
-  >("UNIVERSITY");
-  const [contactEmail, setContactEmail] = useState("");
-  const [note, setNote] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setSubmitting(true);
-    try {
-      await api.post("/circles/apply", {
-        organization: organization.trim(),
-        kind,
-        contactEmail: contactEmail.trim().toLowerCase(),
-        note: note.trim() || undefined,
-      });
-      setSubmitted(true);
-    } catch (e) {
-      setError(errorMessage(e, "Could not submit."));
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  if (submitted) {
-    return (
-      <div className="mx-auto max-w-2xl px-4 py-16 md:px-6 md:py-24">
-        <div className="brutal-card-gold">
-          <p className="brutal-heading text-sm text-gold">APPLICATION RECEIVED.</p>
-          <h1 className="brutal-heading mt-3 text-3xl text-bone md:text-4xl">WE WILL REACH OUT.</h1>
-          <p className="mt-4 font-mono text-bone">
-            Private Circles are reviewed individually. Expect a response within a week.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-8 px-4 py-10 md:px-6 md:py-16">
+    <div className="mx-auto flex max-w-5xl flex-col gap-12 px-4 py-10 md:px-6 md:py-16">
       <header>
-        <p className="font-mono text-xs uppercase tracking-brutal text-muted">PRIVATE CIRCLES</p>
-        <h1 className="brutal-heading mt-3 text-4xl text-bone md:text-6xl lg:text-7xl">
+        <p className="font-mono text-xs uppercase tracking-brutal text-gold">
+          PRIVATE CIRCLES
+        </p>
+        <h1 className="brutal-heading mt-3 text-5xl text-bone md:text-7xl lg:text-8xl">
           BRING PARADOX IN-HOUSE.
         </h1>
         <p className="mt-6 max-w-2xl font-mono text-base text-bone md:text-lg">
-          A closed PARADOX instance for your university seminar, your ethics committee, your
-          design team. Your own paradoxes. Your own archive.
+          A closed PARADOX instance for your school, your university, your team.
+          Age-targeted dilemmas, private matchmaking, and your own archive. Pick
+          the tier that fits and spin up your first circle in minutes.
         </p>
+        <div className="mt-6">
+          <Link to="/pricing" className="brutal-btn brutal-btn-gold inline-block">
+            VIEW PRICING
+          </Link>
+        </div>
       </header>
 
-      <form onSubmit={onSubmit} className="flex flex-col gap-4">
-        <label className="flex flex-col gap-1">
-          <span className="brutal-heading text-xs text-muted">ORGANIZATION</span>
-          <input
-            className="brutal-input"
-            value={organization}
-            onChange={(e) => setOrganization(e.target.value)}
-            placeholder="STANFORD LAW · ACME ETHICS · ETC."
-            required
-            minLength={2}
-            maxLength={120}
-          />
-        </label>
+      <section className="grid grid-cols-1 gap-5 md:grid-cols-3">
+        <Tier
+          label="SCHOOLS"
+          title="JR. HIGH & HIGH SCHOOL"
+          blurb="Turn homeroom into a thinking gym. Age-appropriate dilemmas, teacher-grade sensibility, class-sized matchmaking."
+          bullets={[
+            "Jr. High and High School dilemma packs",
+            "Per-class games on class schedules",
+            "Teacher audit view (coming soon)",
+            "Invite codes that seat a whole period",
+          ]}
+        />
+        <Tier
+          label="UNIVERSITIES"
+          title="UNIVERSITY"
+          blurb="Applied ethics, political philosophy, research ethics. Seminars that argue in writing, not just in person."
+          bullets={[
+            "University-grade dilemma pack",
+            "Department-wide or seminar-scoped games",
+            "Professor audit view (coming soon)",
+            "Scale to thousands of students",
+          ]}
+        />
+        <Tier
+          label="ORGS"
+          title="CORPORATE"
+          blurb="Run company-wide ethics cohorts. Leadership, whistleblowing, workplace fairness — the dilemmas your team should already be arguing about."
+          bullets={[
+            "Corporate dilemma pack",
+            "Team or department games",
+            "Manager audit view (coming soon)",
+            "Unlimited-seat plans available",
+          ]}
+        />
+      </section>
 
-        <label className="flex flex-col gap-1">
-          <span className="brutal-heading text-xs text-muted">KIND</span>
-          <select
-            className="brutal-input appearance-none"
-            value={kind}
-            onChange={(e) => setKind(e.target.value as typeof kind)}
-          >
-            <option className="bg-ink text-bone" value="JUNIOR_HIGH">
-              Jr. High School
-            </option>
-            <option className="bg-ink text-bone" value="HIGH_SCHOOL">
-              High School
-            </option>
-            <option className="bg-ink text-bone" value="UNIVERSITY">
-              University
-            </option>
-            <option className="bg-ink text-bone" value="COMPANY">
-              Company / Organization
-            </option>
-          </select>
-        </label>
+      <section className="border-2 border-bone p-5 md:p-6">
+        <p className="brutal-heading text-sm text-gold">WHAT YOU GET</p>
+        <ul className="mt-4 grid grid-cols-1 gap-3 font-mono text-sm text-bone md:grid-cols-2 md:text-base">
+          <li className="border-l-2 border-gold pl-3">
+            A <span className="text-gold">closed instance</span> — your members only see each other, match only with each other.
+          </li>
+          <li className="border-l-2 border-gold pl-3">
+            Age- and role-targeted <span className="text-gold">dilemma packs</span> built for your audience.
+          </li>
+          <li className="border-l-2 border-gold pl-3">
+            <span className="text-gold">Per-game games</span> — run each class, cohort, or department on its own schedule.
+          </li>
+          <li className="border-l-2 border-gold pl-3">
+            <span className="text-gold">One-click invite codes</span> — paste in the syllabus or the #ethics channel.
+          </li>
+        </ul>
+      </section>
 
-        <label className="flex flex-col gap-1">
-          <span className="brutal-heading text-xs text-muted">CONTACT EMAIL</span>
-          <input
-            className="brutal-input"
-            type="email"
-            value={contactEmail}
-            onChange={(e) => setContactEmail(e.target.value)}
-            required
-          />
-        </label>
-
-        <label className="flex flex-col gap-1">
-          <span className="brutal-heading text-xs text-muted">WHY (OPTIONAL)</span>
-          <textarea
-            className="brutal-input min-h-[120px] resize-none"
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            maxLength={1000}
-            placeholder="TELL US THE USE CASE."
-          />
-        </label>
-
-        {error && <p className="border-2 border-blood p-3 font-mono text-sm text-blood">{error}</p>}
-
-        <button className="brutal-btn brutal-btn-gold self-start" disabled={submitting}>
-          {submitting ? "..." : "APPLY"}
-        </button>
-      </form>
+      <footer className="border-t-2 border-smoke pt-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="font-mono text-sm text-muted">
+            Ready to roll out a circle for your org?
+          </p>
+          <Link to="/pricing" className="brutal-btn brutal-btn-gold">
+            VIEW PRICING
+          </Link>
+        </div>
+      </footer>
     </div>
+  );
+}
+
+function Tier({
+  label,
+  title,
+  blurb,
+  bullets,
+}: {
+  label: string;
+  title: string;
+  blurb: string;
+  bullets: string[];
+}) {
+  return (
+    <article className="border-2 border-bone p-5 md:p-6">
+      <p className="brutal-heading text-xs text-gold">{label}</p>
+      <h3 className="brutal-heading mt-2 text-2xl text-bone md:text-3xl">{title}</h3>
+      <p className="mt-3 font-mono text-sm text-bone md:text-base">{blurb}</p>
+      <ul className="mt-4 flex flex-col gap-2 font-mono text-sm text-bone">
+        {bullets.map((b) => (
+          <li key={b} className="border-l-2 border-smoke pl-3">
+            {b}
+          </li>
+        ))}
+      </ul>
+    </article>
   );
 }

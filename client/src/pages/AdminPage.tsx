@@ -56,6 +56,7 @@ interface AdminUser {
   isPremium: boolean;
   isAdmin: boolean;
   isBanned: boolean;
+  isGrantedCircleAccess: boolean;
   createdAt: string;
   tribeHistory: { tribe: string; airDate: string }[];
 }
@@ -557,6 +558,23 @@ function UsersPanel() {
     }
   }
 
+  async function toggleCircleAccess(id: string, name: string, granted: boolean) {
+    if (
+      !confirm(
+        granted
+          ? `Grant ${name} circle creation access?`
+          : `Revoke ${name}'s circle creation access?`,
+      )
+    )
+      return;
+    try {
+      await api.post(`/admin/users/${id}/grant-circle-access`, { granted });
+      load();
+    } catch (e) {
+      setErr(errorMessage(e, "Access toggle failed."));
+    }
+  }
+
   if (err) return <ErrorBox>{err}</ErrorBox>;
   if (!rows) return <p className="brutal-heading text-muted">LOADING...</p>;
 
@@ -597,6 +615,7 @@ function UsersPanel() {
                 <div className="flex flex-wrap gap-1">
                   {u.isAdmin && <Pill color="gold">ADMIN</Pill>}
                   {u.isPremium && <Pill color="gold">PREMIUM</Pill>}
+                  {u.isGrantedCircleAccess && <Pill color="gold">CIRCLES</Pill>}
                   {u.isBanned && <Pill color="blood">BANNED</Pill>}
                 </div>
               </td>
@@ -607,6 +626,18 @@ function UsersPanel() {
                     onClick={() => resetCivility(u.id, u.username)}
                   >
                     RESET CIV
+                  </button>
+                  <button
+                    className={`border px-2 py-1 text-xs uppercase tracking-brutal ${
+                      u.isGrantedCircleAccess
+                        ? "border-blood text-blood hover:bg-blood hover:text-ink"
+                        : "border-gold text-gold hover:bg-gold hover:text-ink"
+                    }`}
+                    onClick={() =>
+                      toggleCircleAccess(u.id, u.username, !u.isGrantedCircleAccess)
+                    }
+                  >
+                    {u.isGrantedCircleAccess ? "REVOKE CIRCLES" : "GRANT CIRCLES"}
                   </button>
                   <button
                     className={`border px-2 py-1 text-xs uppercase tracking-brutal ${

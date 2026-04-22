@@ -271,6 +271,7 @@ adminRouter.get("/users", async (_req, res, next) => {
         isPremium: true,
         isAdmin: true,
         isBanned: true,
+        isGrantedCircleAccess: true,
         createdAt: true,
         tribeHistory: {
           orderBy: { airDate: "desc" },
@@ -307,6 +308,26 @@ adminRouter.post("/users/:id/ban", async (req, res, next) => {
       where: { id: req.params.id },
       data: { isBanned: banned },
       select: { id: true, username: true, isBanned: true },
+    });
+    res.json({ user });
+  } catch (e) {
+    next(e);
+  }
+});
+
+const grantCircleAccessSchema = z.object({ granted: z.boolean() });
+
+/**
+ * Admin toggle for the Circle creation paywall. Lets us comp beta/testing
+ * accounts without routing them through Stripe.
+ */
+adminRouter.post("/users/:id/grant-circle-access", async (req, res, next) => {
+  try {
+    const { granted } = grantCircleAccessSchema.parse(req.body);
+    const user = await prisma.user.update({
+      where: { id: req.params.id },
+      data: { isGrantedCircleAccess: granted },
+      select: { id: true, username: true, isGrantedCircleAccess: true },
     });
     res.json({ user });
   } catch (e) {

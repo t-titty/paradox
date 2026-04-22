@@ -7,6 +7,7 @@ import { prisma } from "../db.js";
 import { HttpError } from "../middleware/error.js";
 import { requireAuth, signToken, type AuthedRequest } from "../middleware/auth.js";
 import { containsProfanity } from "../lib/profanity.js";
+import { userHasCircleAccess } from "../lib/circleAccess.js";
 
 export const authRouter = Router();
 
@@ -49,6 +50,23 @@ const userSelect = {
   twoFactorEnabled: true,
 } as const;
 
+type MeUser = {
+  id: string;
+  username: string;
+  email: string;
+  wisdomPoints: number;
+  civilityScore: number;
+  isPremium: boolean;
+  isAdmin: boolean;
+  twoFactorEnabled: boolean;
+};
+
+// Wrap the DB row with the derived hasCircleAccess flag so the client can
+// render the paywall CTA without a second request.
+async function withAccessFlags<T extends MeUser>(user: T) {
+  return { ...user, hasCircleAccess: await userHasCircleAccess(user.id) };
+}
+
 function verifyTotp(secret: string, token: string): boolean {
   return speakeasy.totp.verify({
     secret,
@@ -90,7 +108,7 @@ authRouter.post("/register", async (req, res, next) => {
       select: userSelect,
     });
 
-    res.status(201).json({ user, token: signToken(user.id) });
+    res.status(201).json({ user: await withAccessFlags(user), token: signToken(user.id) });
   } catch (e) {
     next(e);
   }
@@ -121,7 +139,7 @@ authRouter.post("/login", async (req, res, next) => {
     }
 
     res.json({
-      user: {
+      user: await withAccessFlags({
         id: user.id,
         username: user.username,
         email: user.email,
@@ -130,7 +148,7 @@ authRouter.post("/login", async (req, res, next) => {
         isPremium: user.isPremium,
         isAdmin: user.isAdmin,
         twoFactorEnabled: user.twoFactorEnabled,
-      },
+      }),
       token: signToken(user.id, rememberMe),
     });
   } catch (e) {
@@ -146,7 +164,7 @@ authRouter.get("/me", requireAuth, async (req, res, next) => {
       select: userSelect,
     });
     if (!user) throw new HttpError(404, "User not found", "not_found");
-    res.json({ user });
+    res.json({ user: await withAccessFlags(user) });
   } catch (e) {
     next(e);
   }

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, errorMessage } from "../lib/api.ts";
+import { useAuth } from "../context/AuthContext.tsx";
 
 /* ---------- types (mirror the server router) ---------- */
 
@@ -86,6 +87,8 @@ export function CirclesManagePage() {
 /* ---------- LIST ---------- */
 
 function CircleListView() {
+  const { user } = useAuth();
+  const hasAccess = Boolean(user?.hasCircleAccess);
   const [circles, setCircles] = useState<CircleSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -175,23 +178,45 @@ function CircleListView() {
         </section>
       )}
 
-      {creating ? (
-        <CreateCircleForm
-          onDone={() => {
-            setCreating(false);
-            load();
-          }}
-          onCancel={() => setCreating(false)}
-        />
+      {hasAccess ? (
+        creating ? (
+          <CreateCircleForm
+            onDone={() => {
+              setCreating(false);
+              load();
+            }}
+            onCancel={() => setCreating(false)}
+          />
+        ) : (
+          <button
+            className="brutal-btn brutal-btn-gold self-start"
+            onClick={() => setCreating(true)}
+          >
+            + CREATE CIRCLE
+          </button>
+        )
       ) : (
-        <button
-          className="brutal-btn brutal-btn-gold self-start"
-          onClick={() => setCreating(true)}
-        >
-          + CREATE CIRCLE
-        </button>
+        <AccessGate />
       )}
     </Shell>
+  );
+}
+
+function AccessGate() {
+  return (
+    <div className="border-2 border-gold p-5 md:p-6">
+      <p className="brutal-heading text-sm text-gold">CIRCLE CREATION IS PAID.</p>
+      <h2 className="brutal-heading mt-3 text-2xl text-bone md:text-3xl">
+        GET ACCESS TO START A CIRCLE.
+      </h2>
+      <p className="mt-3 font-mono text-sm text-bone md:text-base">
+        Closed PARADOX instances for schools, universities, and companies run
+        on a subscription. Pick a tier that fits your org and go.
+      </p>
+      <Link to="/pricing" className="brutal-btn brutal-btn-gold mt-5 inline-block">
+        GET ACCESS
+      </Link>
+    </div>
   );
 }
 

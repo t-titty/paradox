@@ -27,6 +27,8 @@ export interface User {
   isPremium?: boolean;
   isAdmin?: boolean;
   twoFactorEnabled?: boolean;
+  /** Server-derived flag: granted by admin OR owns an active paid Circle. */
+  hasCircleAccess?: boolean;
 }
 
 export interface Paradox {

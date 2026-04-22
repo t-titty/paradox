@@ -7,7 +7,7 @@ export const circlesRouter = Router();
 
 const applicationSchema = z.object({
   organization: z.string().min(2).max(120),
-  kind: z.enum(["university", "company", "other"]),
+  kind: z.enum(["JUNIOR_HIGH", "HIGH_SCHOOL", "UNIVERSITY", "COMPANY"]),
   contactEmail: z.string().email(),
   note: z.string().max(1000).optional(),
 });

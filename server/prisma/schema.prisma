@@ -173,7 +173,7 @@ model Duel {
 model CircleApplication {
   id           String   @id @default(cuid())
   organization String
-  kind         String   // "university" | "company" | "other"
+  kind         String   // "JUNIOR_HIGH" | "HIGH_SCHOOL" | "UNIVERSITY" | "COMPANY"
   contactEmail String
   note         String?
   submittedByUserId String?

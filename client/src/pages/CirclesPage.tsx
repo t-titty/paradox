@@ -7,7 +7,9 @@ import { api, errorMessage } from "../lib/api.ts";
  */
 export function CirclesPage() {
   const [organization, setOrganization] = useState("");
-  const [kind, setKind] = useState<"university" | "company" | "other">("university");
+  const [kind, setKind] = useState<
+    "JUNIOR_HIGH" | "HIGH_SCHOOL" | "UNIVERSITY" | "COMPANY"
+  >("UNIVERSITY");
   const [contactEmail, setContactEmail] = useState("");
   const [note, setNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -81,14 +83,17 @@ export function CirclesPage() {
             value={kind}
             onChange={(e) => setKind(e.target.value as typeof kind)}
           >
-            <option className="bg-ink text-bone" value="university">
-              UNIVERSITY
+            <option className="bg-ink text-bone" value="JUNIOR_HIGH">
+              Jr. High School
             </option>
-            <option className="bg-ink text-bone" value="company">
-              COMPANY
+            <option className="bg-ink text-bone" value="HIGH_SCHOOL">
+              High School
             </option>
-            <option className="bg-ink text-bone" value="other">
-              OTHER
+            <option className="bg-ink text-bone" value="UNIVERSITY">
+              University
+            </option>
+            <option className="bg-ink text-bone" value="COMPANY">
+              Company / Organization
             </option>
           </select>
         </label>

@@ -44,6 +44,17 @@ const schema = z.object({
     .optional()
     .transform((v) => v === "true" || v === "1")
     .default("false"),
+  // Resend (transactional email). Optional in dev so the server still
+  // boots without a key — the email helper returns `{ sent: false }` and
+  // the password-reset flow still persists the token (so you can copy it
+  // out of the server logs). `EMAIL_FROM` defaults to a Resend-provided
+  // sandbox sender so a first-run prod deploy doesn't fail on a missing
+  // verified domain; override with your real from-address once DNS is set.
+  RESEND_API_KEY: z
+    .string()
+    .optional()
+    .transform((v) => (v && v.length > 0 ? v : undefined)),
+  EMAIL_FROM: z.string().default("PARADOX <onboarding@resend.dev>"),
 });
 
 const parsed = schema.safeParse(process.env);

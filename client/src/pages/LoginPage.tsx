@@ -94,6 +94,12 @@ export function LoginPage() {
               <button className="brutal-btn brutal-btn-gold" disabled={submitting}>
                 {submitting ? "..." : "LOGIN"}
               </button>
+              <Link
+                to="/forgot-password"
+                className="self-start font-mono text-xs uppercase tracking-brutal text-muted hover:text-gold"
+              >
+                FORGOT YOUR PASSWORD?
+              </Link>
             </form>
             <p className="font-mono text-sm text-white">
               No account?{" "}

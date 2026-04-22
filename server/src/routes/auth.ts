@@ -1,4 +1,5 @@
 import { Router } from "express";
+import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import speakeasy from "speakeasy";
@@ -9,6 +10,7 @@ import { requireAuth, signToken, type AuthedRequest } from "../middleware/auth.j
 import { containsProfanity } from "../lib/profanity.js";
 import { userHasCircleAccess, userOwnsOrAdminsCircle } from "../lib/circleAccess.js";
 import { env } from "../env.js";
+import { sendEmail } from "../lib/email.js";
 
 export const authRouter = Router();
 
@@ -285,6 +287,136 @@ authRouter.post("/2fa/disable", requireAuth, async (req, res, next) => {
     });
 
     res.json({ twoFactorEnabled: false });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// ──────────────────────────────────────────────────────────────────────
+// Password reset
+// ──────────────────────────────────────────────────────────────────────
+
+const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+const forgotPasswordSchema = z.object({
+  email: z.string().email().max(200),
+});
+
+const resetPasswordSchema = z.object({
+  // 32 bytes hex = 64 chars; use a generous upper bound.
+  token: z.string().min(20).max(200),
+  newPassword: z.string().min(8).max(128),
+});
+
+/**
+ * POST /api/auth/forgot-password
+ *
+ * Always responds 200 with the same message whether the email exists or
+ * not — the response MUST NOT reveal which addresses are registered. If
+ * the email does match a user, we generate a 32-byte random token, persist
+ * it with a 1-hour expiry, and mail a reset link. If email delivery isn't
+ * configured (no RESEND_API_KEY in dev), we still persist the token and log
+ * the reset URL so local testing works.
+ */
+authRouter.post("/forgot-password", async (req, res, next) => {
+  try {
+    const { email } = forgotPasswordSchema.parse(req.body);
+
+    // Normalize so "User@Example.com" matches a lower-cased stored email.
+    const normalized = email.toLowerCase();
+    const user = await prisma.user.findUnique({
+      where: { email: normalized },
+      select: { id: true, email: true, username: true },
+    });
+
+    // If the user exists, mint a token and send the email. We swallow any
+    // email-send failure here so a mis-configured RESEND_API_KEY can't be
+    // used to probe which addresses are registered — the outward behavior
+    // is identical to the no-user case.
+    if (user) {
+      const token = crypto.randomBytes(32).toString("hex");
+      const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_MS);
+      await prisma.passwordResetToken.create({
+        data: { userId: user.id, token, expiresAt },
+      });
+
+      const resetUrl = `${env.PUBLIC_APP_URL}/reset-password?token=${token}`;
+      const subject = "Reset your PARADOX password";
+      const text = [
+        "Someone requested a password reset for your PARADOX account.",
+        "",
+        "Click the link below to reset your password.",
+        "This link expires in 1 hour.",
+        "",
+        resetUrl,
+        "",
+        "If you didn't request this, ignore this email.",
+      ].join("\n");
+
+      const result = await sendEmail({ to: user.email, subject, text });
+      if (!result.sent) {
+        // Log so an operator can see the reset URL in dev or diagnose a
+        // Resend outage in prod. Never surfaced in the response.
+        console.warn(
+          `[auth] reset email not sent (${result.reason}): ${resetUrl}`,
+          result.reason === "send_failed" ? result.error : "",
+        );
+      }
+    }
+
+    res.json({
+      message:
+        "If that email exists you'll receive a reset link shortly.",
+    });
+  } catch (e) {
+    next(e);
+  }
+});
+
+/**
+ * POST /api/auth/reset-password
+ *
+ * Consumes a token minted by /forgot-password. Validates it exists, hasn't
+ * expired, and hasn't been used; then hashes the new password and flips the
+ * token's `usedAt` in the same transaction so the window is atomic.
+ */
+authRouter.post("/reset-password", async (req, res, next) => {
+  try {
+    const { token, newPassword } = resetPasswordSchema.parse(req.body);
+
+    const row = await prisma.passwordResetToken.findUnique({
+      where: { token },
+      select: { id: true, userId: true, expiresAt: true, usedAt: true },
+    });
+    const now = new Date();
+    if (!row || row.usedAt || row.expiresAt <= now) {
+      throw new HttpError(
+        400,
+        "This reset link is invalid or has expired. Request a new one.",
+        "invalid_reset_token",
+      );
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
+
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: row.userId },
+        data: { hashedPassword },
+      }),
+      prisma.passwordResetToken.update({
+        where: { id: row.id },
+        data: { usedAt: now },
+      }),
+      // Invalidate any other outstanding tokens for this user so a stolen
+      // link can't be reused after the legitimate reset.
+      prisma.passwordResetToken.updateMany({
+        where: { userId: row.userId, usedAt: null, id: { not: row.id } },
+        data: { usedAt: now },
+      }),
+    ]);
+
+    res.json({ ok: true });
   } catch (e) {
     next(e);
   }

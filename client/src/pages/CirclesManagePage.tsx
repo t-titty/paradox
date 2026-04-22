@@ -240,10 +240,10 @@ function ColosseumSection() {
         A live party game running on top of your circle.
       </p>
       <p className="mt-3 font-mono text-xs uppercase tracking-brutal text-muted">
-        FREE: 3 SESSIONS LIFETIME · 30 MIN · 8 PLAYERS
+        FREE: 1 HOUR LIFETIME · NO CARD · PARADOX ACCOUNT
       </p>
       <p className="font-mono text-xs uppercase tracking-brutal text-muted">
-        PARTY PRO ($9.99/MO): UNLIMITED · 2 HOURS · 25 PLAYERS
+        PARTY PRO ($9.99/MO): 1-HOUR TRIAL · THEN UNLIMITED · 25 PLAYERS · 2 HOURS
       </p>
       <div className="mt-5">
         <Link to="/party" className="brutal-btn brutal-btn-gold inline-block">

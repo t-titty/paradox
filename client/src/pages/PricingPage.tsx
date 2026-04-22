@@ -195,20 +195,22 @@ function PartyFreeCard() {
           PARTY · FREE
         </p>
         <p className="mt-2 font-mono text-xs uppercase tracking-brutal text-muted">
-          3 SESSIONS LIFETIME
+          1 FREE HOUR · LIFETIME
         </p>
       </div>
       <div className="flex items-baseline gap-2">
         <span className="brutal-heading text-5xl text-bone">$0</span>
         <span className="font-mono text-xs uppercase tracking-brutal text-muted">
-          ALWAYS
+          NO CARD
         </span>
       </div>
       <ul className="flex flex-col gap-2 font-mono text-sm text-bone">
-        <li className="border-l-2 border-smoke pl-3">3 free sessions lifetime</li>
-        <li className="border-l-2 border-smoke pl-3">Up to 30 minutes per session</li>
-        <li className="border-l-2 border-smoke pl-3">Up to 8 players per session</li>
-        <li className="border-l-2 border-smoke pl-3">Standard paradox pack only</li>
+        <li className="border-l-2 border-smoke pl-3">1 free hour to try</li>
+        <li className="border-l-2 border-smoke pl-3">No credit card needed</li>
+        <li className="border-l-2 border-smoke pl-3">Paradox account required</li>
+        <li className="border-l-2 border-smoke pl-3">
+          After 1 hour, subscribe to continue
+        </li>
       </ul>
       <Link
         to="/party"

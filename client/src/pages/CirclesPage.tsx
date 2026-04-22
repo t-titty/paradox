@@ -154,13 +154,14 @@ export function CirclesPage() {
           <article className="border-2 border-smoke p-4">
             <p className="brutal-heading text-xs text-muted">FREE</p>
             <p className="mt-2 font-mono text-sm text-bone">
-              3 sessions lifetime · 30 min each · up to 8 players
+              1 free hour lifetime · no credit card · Paradox account required
             </p>
           </article>
           <article className="border-2 border-gold p-4">
             <p className="brutal-heading text-xs text-gold">PARTY PRO — $9.99/mo</p>
             <p className="mt-2 font-mono text-sm text-bone">
-              Unlimited sessions · up to 2 hours each · up to 25 players
+              1-hour trial, no card · then $9.99/mo · unlimited sessions · up
+              to 25 players · up to 2 hours each
             </p>
           </article>
         </div>

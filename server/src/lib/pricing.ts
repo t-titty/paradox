@@ -378,11 +378,13 @@ export const FEATURE_PLANS: FeaturePlan[] = [
   {
     key: "PARTY_PRO",
     name: "Party Pro",
-    tagline: "Unlimited Colosseum sessions, bigger rooms, longer play.",
+    tagline:
+      "Try free for 1 hour — no card. Then $9.99/month for unlimited hosting.",
     monthlyUsd: 9.99,
     popular: true,
     features: [
-      "Unlimited party sessions",
+      "Try free: 1 hour, no credit card",
+      "Unlimited sessions after subscribing",
       "Up to 25 players per session",
       "Up to 2 hours per session",
       "All paradox packs included",

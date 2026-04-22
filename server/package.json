@@ -14,7 +14,8 @@
     "db:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
     "db:reset": "prisma migrate reset --force",
-    "stripe:sync": "tsx src/scripts/stripeSync.ts"
+    "stripe:sync": "tsx src/scripts/stripeSync.ts",
+    "audit:critical": "npm audit --audit-level=critical"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -27,6 +28,8 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
+    "express-rate-limit": "^8.3.2",
+    "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
     "qrcode": "^1.5.4",
     "socket.io": "^4.8.1",

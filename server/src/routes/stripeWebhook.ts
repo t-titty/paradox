@@ -51,6 +51,23 @@ stripeWebhookRouter.post(
       return res.status(400).send(`Webhook Error: ${msg}`);
     }
 
+    // Idempotency: Stripe will retry a delivery if we don't ack in time.
+    // Store event.id on first receive; a unique-constraint violation on a
+    // retry means we've already processed it and should just 200.
+    try {
+      await prisma.processedStripeEvent.create({
+        data: { eventId: event.id, type: event.type },
+      });
+    } catch (err) {
+      // Prisma P2002 = unique constraint violation.
+      const code = (err as { code?: string }).code;
+      if (code === "P2002") {
+        return res.json({ received: true, deduplicated: true });
+      }
+      console.error("[stripe:webhook] idempotency write failed", err);
+      return res.status(500).send("idempotency error");
+    }
+
     try {
       switch (event.type) {
         case "checkout.session.completed":

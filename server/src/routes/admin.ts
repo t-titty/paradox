@@ -1,9 +1,11 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../db.js";
-import { requireAdmin } from "../middleware/auth.js";
+import { requireAdmin, type AuthedRequest } from "../middleware/auth.js";
 import { HttpError } from "../middleware/error.js";
 import { parseYmd, ymd } from "../phases.js";
+import { cleanText } from "../lib/htmlSanitize.js";
+import { audit } from "../lib/audit.js";
 
 export const adminRouter = Router();
 
@@ -71,11 +73,11 @@ adminRouter.get("/paradoxes", async (_req, res, next) => {
 });
 
 const paradoxInput = z.object({
-  title: z.string().min(2).max(200),
-  description: z.string().min(2).max(2000),
-  optionA: z.string().min(1).max(500),
-  optionB: z.string().min(1).max(500),
-  category: z.string().min(2).max(80),
+  title: z.string().min(2).max(200).transform(cleanText),
+  description: z.string().min(2).max(2000).transform(cleanText),
+  optionA: z.string().min(1).max(500).transform(cleanText),
+  optionB: z.string().min(1).max(500).transform(cleanText),
+  category: z.string().min(2).max(80).transform(cleanText),
   // YYYY-MM-DD or null/empty to unschedule.
   airDate: z
     .string()
@@ -86,6 +88,7 @@ const paradoxInput = z.object({
 
 adminRouter.post("/paradoxes", async (req, res, next) => {
   try {
+    const { userId: adminId } = req as unknown as AuthedRequest;
     const body = paradoxInput.parse(req.body);
     const airDate = body.airDate ? parseYmd(body.airDate) : null;
 
@@ -104,6 +107,12 @@ adminRouter.post("/paradoxes", async (req, res, next) => {
         airDate,
       },
     });
+    await audit({
+      userId: adminId,
+      action: "admin.paradox.create",
+      req,
+      metadata: { paradoxId: row.id, title: row.title, airDate: body.airDate },
+    });
     res.status(201).json({ paradox: row });
   } catch (e) {
     next(e);
@@ -112,6 +121,7 @@ adminRouter.post("/paradoxes", async (req, res, next) => {
 
 adminRouter.put("/paradoxes/:id", async (req, res, next) => {
   try {
+    const { userId: adminId } = req as unknown as AuthedRequest;
     const id = req.params.id;
     const body = paradoxInput.parse(req.body);
     const airDate = body.airDate ? parseYmd(body.airDate) : null;
@@ -134,6 +144,12 @@ adminRouter.put("/paradoxes/:id", async (req, res, next) => {
         airDate,
       },
     });
+    await audit({
+      userId: adminId,
+      action: "admin.paradox.update",
+      req,
+      metadata: { paradoxId: id, airDate: body.airDate },
+    });
     res.json({ paradox: row });
   } catch (e) {
     next(e);
@@ -142,7 +158,14 @@ adminRouter.put("/paradoxes/:id", async (req, res, next) => {
 
 adminRouter.delete("/paradoxes/:id", async (req, res, next) => {
   try {
+    const { userId: adminId } = req as unknown as AuthedRequest;
     await prisma.paradox.delete({ where: { id: req.params.id } });
+    await audit({
+      userId: adminId,
+      action: "admin.paradox.delete",
+      req,
+      metadata: { paradoxId: req.params.id },
+    });
     res.json({ ok: true });
   } catch (e) {
     next(e);
@@ -186,6 +209,7 @@ async function nextFreeAirDate(): Promise<Date> {
 
 adminRouter.post("/submissions/:id/approve", async (req, res, next) => {
   try {
+    const { userId: adminId } = req as unknown as AuthedRequest;
     const id = req.params.id;
     const submission = await prisma.submittedParadox.findUnique({ where: { id } });
     if (!submission) throw new HttpError(404, "Submission not found", "not_found");
@@ -214,6 +238,17 @@ adminRouter.post("/submissions/:id/approve", async (req, res, next) => {
         paradoxId: created.id,
       },
     });
+    await audit({
+      userId: adminId,
+      action: "admin.submission.approve",
+      req,
+      metadata: {
+        submissionId: id,
+        paradoxId: created.id,
+        submittedBy: submission.userId,
+        scheduledFor: ymd(airDate),
+      },
+    });
     res.json({ paradox: created, scheduledFor: ymd(airDate) });
   } catch (e) {
     next(e);
@@ -222,6 +257,7 @@ adminRouter.post("/submissions/:id/approve", async (req, res, next) => {
 
 adminRouter.post("/submissions/:id/reject", async (req, res, next) => {
   try {
+    const { userId: adminId } = req as unknown as AuthedRequest;
     const id = req.params.id;
     const submission = await prisma.submittedParadox.findUnique({ where: { id } });
     if (!submission) throw new HttpError(404, "Submission not found", "not_found");
@@ -231,6 +267,12 @@ adminRouter.post("/submissions/:id/reject", async (req, res, next) => {
     const updated = await prisma.submittedParadox.update({
       where: { id },
       data: { status: "rejected", reviewedAt: new Date() },
+    });
+    await audit({
+      userId: adminId,
+      action: "admin.submission.reject",
+      req,
+      metadata: { submissionId: id, submittedBy: submission.userId },
     });
     res.json({ submission: updated });
   } catch (e) {
@@ -288,10 +330,17 @@ adminRouter.get("/users", async (_req, res, next) => {
 
 adminRouter.post("/users/:id/reset-civility", async (req, res, next) => {
   try {
+    const { userId: adminId } = req as unknown as AuthedRequest;
     const user = await prisma.user.update({
       where: { id: req.params.id },
       data: { civilityScore: 100 },
       select: { id: true, username: true, civilityScore: true },
+    });
+    await audit({
+      userId: adminId,
+      action: "admin.user.reset_civility",
+      req,
+      metadata: { targetUserId: user.id, targetUsername: user.username },
     });
     res.json({ user });
   } catch (e) {
@@ -303,11 +352,18 @@ const banSchema = z.object({ banned: z.boolean() });
 
 adminRouter.post("/users/:id/ban", async (req, res, next) => {
   try {
+    const { userId: adminId } = req as unknown as AuthedRequest;
     const { banned } = banSchema.parse(req.body);
     const user = await prisma.user.update({
       where: { id: req.params.id },
       data: { isBanned: banned },
       select: { id: true, username: true, isBanned: true },
+    });
+    await audit({
+      userId: adminId,
+      action: banned ? "admin.user.ban" : "admin.user.unban",
+      req,
+      metadata: { targetUserId: user.id, targetUsername: user.username },
     });
     res.json({ user });
   } catch (e) {
@@ -323,11 +379,20 @@ const grantCircleAccessSchema = z.object({ granted: z.boolean() });
  */
 adminRouter.post("/users/:id/grant-circle-access", async (req, res, next) => {
   try {
+    const { userId: adminId } = req as unknown as AuthedRequest;
     const { granted } = grantCircleAccessSchema.parse(req.body);
     const user = await prisma.user.update({
       where: { id: req.params.id },
       data: { isGrantedCircleAccess: granted },
       select: { id: true, username: true, isGrantedCircleAccess: true },
+    });
+    await audit({
+      userId: adminId,
+      action: granted
+        ? "admin.user.grant_circle_access"
+        : "admin.user.revoke_circle_access",
+      req,
+      metadata: { targetUserId: user.id, targetUsername: user.username },
     });
     res.json({ user });
   } catch (e) {

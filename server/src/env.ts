@@ -29,6 +29,17 @@ const schema = z.object({
   // Public-facing URL the Stripe success/cancel pages redirect back to.
   // Defaults to localhost in dev.
   PUBLIC_APP_URL: z.string().url().default("http://localhost:5173"),
+  // Comma-separated list of allowed CORS origins. In dev we include common
+  // Vite ports. In prod set this explicitly to your deployed origin(s).
+  ALLOWED_ORIGINS: z
+    .string()
+    .default("http://localhost:5173,http://localhost:4173,http://127.0.0.1:5173")
+    .transform((s) =>
+      s
+        .split(",")
+        .map((x) => x.trim())
+        .filter(Boolean),
+    ),
   ANTHROPIC_API_KEY: z.string().min(1),
   ANTHROPIC_MODEL: z.string().default("claude-sonnet-4-6"),
   PHASE_DROP_HOUR: z.coerce.number().int().min(0).max(23).default(8),

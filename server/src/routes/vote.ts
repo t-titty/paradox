@@ -6,14 +6,17 @@ import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { HttpError } from "../middleware/error.js";
 import { validateJustification } from "../lib/sentence.js";
 import { containsProfanity } from "../lib/profanity.js";
+import { cleanText } from "../lib/htmlSanitize.js";
 import { parseYmd, resolvePhase } from "../phases.js";
 
 export const voteRouter = Router();
 
+// Justification is fed to the Oracle prompt and rendered in the archive, so
+// scrub HTML at the boundary. Length bounds live inside validateJustification.
 const voteSchema = z.object({
   paradoxId: z.string().min(1),
   choice: z.enum(["A", "B"]),
-  justification: z.string(),
+  justification: z.string().max(2000).transform(cleanText),
 });
 
 /**

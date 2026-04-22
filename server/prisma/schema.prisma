@@ -270,6 +270,34 @@ model SynthesisArchive {
   @@index([signedAt])
 }
 
+// Append-only log for sensitive events (auth + admin actions). Written via
+// lib/audit.ts — never updated or deleted from app code. Retention is a DB-
+// level concern.
+model AuditLog {
+  id        String   @id @default(cuid())
+  // Acting user. Nullable so we can log pre-auth events (failed login,
+  // register attempt with a taken username, etc.).
+  userId    String?
+  // Short stable code, e.g. "login.succeeded", "admin.user.ban".
+  action    String
+  // Arbitrary JSON payload — target ids, before/after diffs, reason strings.
+  metadata  Json     @default("{}")
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([action, createdAt])
+}
+
+// Stripe webhook idempotency guard. We upsert event.id on receive and bail
+// if the row already exists — prevents double Circle creation if Stripe
+// retries a delivery.
+model ProcessedStripeEvent {
+  eventId   String   @id
+  type      String
+  createdAt DateTime @default(now())
+}
+
 // Private Circles — closed instances for schools, universities, and companies.
 // A Circle holds one or more CircleGames (e.g. "Period 1 Class"). Membership
 // is per-Circle, not per-Game — members are invited into a Circle and can

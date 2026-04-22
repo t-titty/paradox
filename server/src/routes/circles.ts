@@ -6,16 +6,17 @@ import { HttpError } from "../middleware/error.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { userHasCircleAccess } from "../lib/circleAccess.js";
 import { resolveLookupKey } from "../lib/pricing.js";
+import { cleanText } from "../lib/htmlSanitize.js";
 
 export const circlesRouter = Router();
 
 /* ---------- legacy apply form (kept for now, replaced by /pricing later) -- */
 
 const applicationSchema = z.object({
-  organization: z.string().min(2).max(120),
+  organization: z.string().min(2).max(120).transform(cleanText),
   kind: z.enum(["JUNIOR_HIGH", "HIGH_SCHOOL", "UNIVERSITY", "COMPANY"]),
   contactEmail: z.string().email(),
-  note: z.string().max(1000).optional(),
+  note: z.string().max(1000).optional().transform((v) => (v ? cleanText(v) : v)),
 });
 
 circlesRouter.post("/apply", requireAuth, async (req, res, next) => {
@@ -80,13 +81,18 @@ async function requireCircleManager(userId: string, circleId: string) {
 /* ---------- schemas ---------- */
 
 const createCircleSchema = z.object({
-  name: z.string().trim().min(2).max(80),
+  name: z.string().trim().min(2).max(80).transform(cleanText),
   type: z.enum(["JUNIOR_HIGH", "HIGH_SCHOOL", "UNIVERSITY", "CORPORATE"]),
 });
 
 const createGameSchema = z.object({
-  name: z.string().trim().min(1).max(80),
-  description: z.string().trim().max(400).optional(),
+  name: z.string().trim().min(1).max(80).transform(cleanText),
+  description: z
+    .string()
+    .trim()
+    .max(400)
+    .optional()
+    .transform((v) => (v ? cleanText(v) : v)),
   paradoxPackage: z
     .enum(["STANDARD", "JUNIOR_HIGH", "HIGH_SCHOOL", "UNIVERSITY", "CORPORATE"])
     .default("STANDARD"),
@@ -97,8 +103,13 @@ const createGameSchema = z.object({
 });
 
 const updateGameSchema = z.object({
-  name: z.string().trim().min(1).max(80).optional(),
-  description: z.string().trim().max(400).optional(),
+  name: z.string().trim().min(1).max(80).optional().transform((v) => (v ? cleanText(v) : v)),
+  description: z
+    .string()
+    .trim()
+    .max(400)
+    .optional()
+    .transform((v) => (v ? cleanText(v) : v)),
   isActive: z.boolean().optional(),
 });
 

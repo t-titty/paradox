@@ -3,7 +3,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
 import { env } from "./env.js";
+import { sweep as sweepTokenBlacklist } from "./lib/tokenBlacklist.js";
+import { authLimiter, generalLimiter } from "./middleware/rateLimit.js";
 import { prisma } from "./db.js";
 import { authRouter } from "./routes/auth.js";
 import { paradoxRouter } from "./routes/paradox.js";
@@ -25,10 +28,85 @@ import { createSocketServer } from "./sockets/index.js";
 
 const app = express();
 
-app.use(cors());
+// Trust Railway's (or other) edge proxy so req.ip reflects the real client
+// and X-Forwarded-For is honored. `1` trusts exactly one hop — enough for
+// our deployment topology, conservative for everything else.
+if (env.NODE_ENV === "production") {
+  app.set("trust proxy", 1);
+}
 
-// Stripe webhooks require the raw request body for signature verification,
-// so this route MUST be mounted before the global express.json() below.
+/* ---------- security headers via helmet ----------
+ *
+ * CSP allows our own origin + Stripe (js, api, hosted checkout, webhooks).
+ * Style/script stay `self`. Inline styles are permitted because Tailwind
+ * occasionally emits inline styles (via arbitrary values) and because the
+ * brutalist CSS layer uses a few element-level style attributes.
+ *
+ * `connect-src` includes `ws:` / `wss:` so socket.io can upgrade from
+ * same-origin. `img-src data:` is needed for the 2FA QR code data URL.
+ */
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      useDefaults: true,
+      directives: {
+        "default-src": ["'self'"],
+        "script-src": ["'self'", "https://js.stripe.com"],
+        "connect-src": ["'self'", "https://api.stripe.com", "ws:", "wss:"],
+        "frame-src": [
+          "'self'",
+          "https://js.stripe.com",
+          "https://hooks.stripe.com",
+          "https://checkout.stripe.com",
+        ],
+        "img-src": ["'self'", "data:"],
+        "style-src": ["'self'", "'unsafe-inline'"],
+        "font-src": ["'self'", "data:"],
+        "object-src": ["'none'"],
+        "base-uri": ["'self'"],
+        "form-action": ["'self'", "https://checkout.stripe.com"],
+        "frame-ancestors": ["'none'"],
+        "upgrade-insecure-requests": [],
+      },
+    },
+    // Default X-Frame-Options: DENY — also enforced by frame-ancestors above.
+    frameguard: { action: "deny" },
+    // `strict-origin-when-cross-origin` is the sensible default for
+    // cross-origin navigations (Stripe redirects back with Referer).
+    referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+    // Helmet's cross-origin embedder policy is too strict for hosted Stripe
+    // Checkout's back-link to the SPA; leave it off.
+    crossOriginEmbedderPolicy: false,
+  }),
+);
+
+// Permissions-Policy: deny sensor/feature APIs the app doesn't use.
+app.use((_req, res, next) => {
+  res.setHeader(
+    "Permissions-Policy",
+    "camera=(), microphone=(), geolocation=(), payment=(self), interest-cohort=()",
+  );
+  next();
+});
+
+/* ---------- CORS allowlist ---------- */
+// Only origins listed in ALLOWED_ORIGINS can call /api/*. No wildcard.
+// Requests with no Origin header (curl, same-origin) pass through.
+app.use(
+  cors({
+    origin(origin, cb) {
+      if (!origin) return cb(null, true);
+      if (env.ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
+      return cb(new Error(`Origin ${origin} is not allowed by CORS`));
+    },
+    credentials: true,
+  }),
+);
+
+/* Stripe webhooks require the raw request body for signature verification,
+ * so this route MUST be mounted before the global express.json() below —
+ * and BEFORE any rate limiter, so retries aren't throttled.
+ */
 app.use("/api/webhooks/stripe", stripeWebhookRouter);
 
 app.use(express.json({ limit: "64kb" }));
@@ -37,20 +115,23 @@ app.get("/api/health", (_req, res) => {
   res.json({ ok: true, env: env.NODE_ENV, testMode: env.TEST_MODE });
 });
 
-app.use("/api/auth", authRouter);
-app.use("/api/paradox", paradoxRouter);
-app.use("/api/vote", voteRouter);
-app.use("/api/throwback", throwbackRouter);
-app.use("/api/sort", sortRouter);
-app.use("/api/archive", archiveRouter);
-app.use("/api/profile", profileRouter);
-app.use("/api/flashback", flashbackRouter);
-app.use("/api/library", libraryRouter);
-app.use("/api/circles", circlesRouter);
-app.use("/api/stripe", stripeRouter);
-app.use("/api/feedback", feedbackRouter);
-app.use("/api/submissions", submissionsRouter);
-app.use("/api/admin", adminRouter);
+// Tighter rate limit for auth routes (10/15m); general limiter (100/15m) on
+// everything else. Oracle's per-user 20/hr limit is applied inside
+// sortRouter, after requireAuth, so it can key on userId.
+app.use("/api/auth", authLimiter, authRouter);
+app.use("/api/paradox", generalLimiter, paradoxRouter);
+app.use("/api/vote", generalLimiter, voteRouter);
+app.use("/api/throwback", generalLimiter, throwbackRouter);
+app.use("/api/sort", generalLimiter, sortRouter);
+app.use("/api/archive", generalLimiter, archiveRouter);
+app.use("/api/profile", generalLimiter, profileRouter);
+app.use("/api/flashback", generalLimiter, flashbackRouter);
+app.use("/api/library", generalLimiter, libraryRouter);
+app.use("/api/circles", generalLimiter, circlesRouter);
+app.use("/api/stripe", generalLimiter, stripeRouter);
+app.use("/api/feedback", generalLimiter, feedbackRouter);
+app.use("/api/submissions", generalLimiter, submissionsRouter);
+app.use("/api/admin", generalLimiter, adminRouter);
 
 // In production, serve the built client from the same origin. The client
 // is built to client/dist; at runtime this file is server/dist/index.js,
@@ -74,6 +155,11 @@ createSocketServer(httpServer);
 httpServer.listen(env.PORT, () => {
   console.log(`[paradox] listening on :${env.PORT} (${env.NODE_ENV})`);
 });
+
+// Periodic sweep of expired entries in the in-memory JWT blacklist so the
+// Map can't grow unbounded. Individual checks also prune lazily.
+const BLACKLIST_SWEEP_MS = 10 * 60 * 1000;
+setInterval(sweepTokenBlacklist, BLACKLIST_SWEEP_MS).unref();
 
 async function shutdown(signal: string) {
   console.log(`[paradox] ${signal} received, shutting down`);

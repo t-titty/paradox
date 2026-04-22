@@ -2,12 +2,13 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../db.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
+import { cleanText } from "../lib/htmlSanitize.js";
 
 export const feedbackRouter = Router();
 
 const feedbackSchema = z.object({
   category: z.enum(["bug", "feature", "general"]),
-  message: z.string().min(3).max(2000),
+  message: z.string().min(3).max(2000).transform(cleanText),
 });
 
 /**

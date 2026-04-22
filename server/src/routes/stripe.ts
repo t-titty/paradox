@@ -6,6 +6,7 @@ import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { getStripe } from "../lib/stripe.js";
 import { env } from "../env.js";
 import { resolveLookupKey } from "../lib/pricing.js";
+import { cleanText } from "../lib/htmlSanitize.js";
 
 export const stripeRouter = Router();
 
@@ -27,7 +28,7 @@ function mustStripe() {
 
 const checkoutSchema = z.object({
   priceLookupKey: z.string().min(1).max(64),
-  organizationName: z.string().trim().min(2).max(80),
+  organizationName: z.string().trim().min(2).max(80).transform(cleanText),
 });
 
 /**

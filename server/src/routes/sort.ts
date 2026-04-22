@@ -2,6 +2,7 @@ import { Router } from "express";
 import { prisma } from "../db.js";
 import { env } from "../env.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
+import { oracleLimiter } from "../middleware/rateLimit.js";
 import { HttpError } from "../middleware/error.js";
 import { parseYmd, resolvePhase } from "../phases.js";
 import { sortIntoTribe, TRIBES, type TribeName } from "../lib/oracle.js";
@@ -19,7 +20,7 @@ export const sortRouter = Router();
  * The spec says sorting begins at 12:00 PM. Before that we return 425 so the
  * client can show "not yet" UI. PHASE_OVERRIDE skips the gate for demos.
  */
-sortRouter.get("/me", requireAuth, async (req, res, next) => {
+sortRouter.get("/me", requireAuth, oracleLimiter, async (req, res, next) => {
   try {
     const { userId } = req as AuthedRequest;
     const phase = resolvePhase();

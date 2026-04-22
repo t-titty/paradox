@@ -8,8 +8,26 @@ import { HttpError } from "../middleware/error.js";
 import { requireAuth, signToken, type AuthedRequest } from "../middleware/auth.js";
 import { containsProfanity } from "../lib/profanity.js";
 import { userHasCircleAccess } from "../lib/circleAccess.js";
+import { audit } from "../lib/audit.js";
+import { check as checkLockout, recordFailure, recordSuccess } from "../lib/loginLockout.js";
+import { blacklistToken } from "../lib/tokenBlacklist.js";
 
 export const authRouter = Router();
+
+// Password policy: ≥8 chars, at least one uppercase, one digit, one non-
+// alphanumeric. Enforced server-side so a tampered client can't bypass.
+// Existing accounts with weaker passwords still work — this only gates new
+// registrations (and, later, password-change flows).
+const STRONG_PASSWORD = z
+  .string()
+  .min(8, "Password must be at least 8 characters")
+  .max(128)
+  .refine((p) => /[A-Z]/.test(p), "Password must include an uppercase letter")
+  .refine((p) => /\d/.test(p), "Password must include a number")
+  .refine(
+    (p) => /[^A-Za-z0-9]/.test(p),
+    "Password must include a special character",
+  );
 
 const registerSchema = z.object({
   username: z
@@ -18,7 +36,7 @@ const registerSchema = z.object({
     .max(24)
     .regex(/^[a-zA-Z0-9_]+$/, "Letters, numbers, underscore only"),
   email: z.string().email().max(200),
-  password: z.string().min(8).max(128),
+  password: STRONG_PASSWORD,
 });
 
 const loginSchema = z.object({
@@ -108,6 +126,7 @@ authRouter.post("/register", async (req, res, next) => {
       select: userSelect,
     });
 
+    await audit({ userId: user.id, action: "auth.register", req, metadata: { username } });
     res.status(201).json({ user: await withAccessFlags(user), token: signToken(user.id) });
   } catch (e) {
     next(e);
@@ -118,14 +137,53 @@ authRouter.post("/login", async (req, res, next) => {
   try {
     const { identifier, password, rememberMe, totpCode } = loginSchema.parse(req.body);
 
+    // Lockout check runs before any DB/bcrypt work so repeated attempts are
+    // cheap to reject. Keyed on the normalized identifier — the same user
+    // from different IPs rolls up into one bucket, and vice versa.
+    const lock = checkLockout(identifier);
+    if (lock.locked) {
+      res.setHeader("Retry-After", String(lock.retryAfterSeconds));
+      throw new HttpError(
+        429,
+        `Too many failed attempts. Try again in ${Math.ceil(lock.retryAfterSeconds / 60)} minute(s).`,
+        "account_locked",
+      );
+    }
+
     const user = await prisma.user.findFirst({
       where: { OR: [{ username: identifier }, { email: identifier.toLowerCase() }] },
     });
-    if (!user) throw new HttpError(401, "Invalid credentials", "unauthenticated");
+    if (!user) {
+      recordFailure(identifier);
+      await audit({
+        userId: null,
+        action: "auth.login.failed",
+        req,
+        metadata: { identifier, reason: "unknown_user" },
+      });
+      throw new HttpError(401, "Invalid credentials", "unauthenticated");
+    }
 
     const ok = await bcrypt.compare(password, user.hashedPassword);
-    if (!ok) throw new HttpError(401, "Invalid credentials", "unauthenticated");
-    if (user.isBanned) throw new HttpError(403, "Account suspended", "banned");
+    if (!ok) {
+      recordFailure(identifier);
+      await audit({
+        userId: user.id,
+        action: "auth.login.failed",
+        req,
+        metadata: { identifier, reason: "bad_password" },
+      });
+      throw new HttpError(401, "Invalid credentials", "unauthenticated");
+    }
+    if (user.isBanned) {
+      await audit({
+        userId: user.id,
+        action: "auth.login.failed",
+        req,
+        metadata: { identifier, reason: "banned" },
+      });
+      throw new HttpError(403, "Account suspended", "banned");
+    }
 
     // Password correct. If 2FA is on, require the code before issuing a token.
     if (user.twoFactorEnabled) {
@@ -134,9 +192,24 @@ authRouter.post("/login", async (req, res, next) => {
         return res.json({ twoFactorRequired: true });
       }
       if (!user.twoFactorSecret || !verifyTotp(user.twoFactorSecret, totpCode)) {
+        recordFailure(identifier);
+        await audit({
+          userId: user.id,
+          action: "auth.login.failed",
+          req,
+          metadata: { identifier, reason: "bad_totp" },
+        });
         throw new HttpError(401, "Invalid authenticator code", "invalid_totp");
       }
     }
+
+    recordSuccess(identifier);
+    await audit({
+      userId: user.id,
+      action: "auth.login.succeeded",
+      req,
+      metadata: { rememberMe },
+    });
 
     res.json({
       user: await withAccessFlags({
@@ -165,6 +238,26 @@ authRouter.get("/me", requireAuth, async (req, res, next) => {
     });
     if (!user) throw new HttpError(404, "User not found", "not_found");
     res.json({ user: await withAccessFlags(user) });
+  } catch (e) {
+    next(e);
+  }
+});
+
+/**
+ * POST /api/auth/logout
+ * Blacklists the caller's bearer token until its JWT exp runs out, so a
+ * copy leaked between logout and exp can't still authenticate. No-op if
+ * the token lacks an `exp` claim (shouldn't happen — every token we sign
+ * has one via JWT_EXPIRES_IN).
+ */
+authRouter.post("/logout", requireAuth, async (req, res, next) => {
+  try {
+    const { userId, authToken, authTokenExp } = req as AuthedRequest;
+    if (authToken && authTokenExp) {
+      blacklistToken(authToken, authTokenExp);
+    }
+    await audit({ userId, action: "auth.logout", req });
+    res.status(204).end();
   } catch (e) {
     next(e);
   }
@@ -237,6 +330,7 @@ authRouter.post("/2fa/enable", requireAuth, async (req, res, next) => {
       where: { id: userId },
       data: { twoFactorEnabled: true },
     });
+    await audit({ userId, action: "auth.2fa.enabled", req });
 
     res.json({ twoFactorEnabled: true });
   } catch (e) {
@@ -265,6 +359,7 @@ authRouter.post("/2fa/disable", requireAuth, async (req, res, next) => {
       where: { id: userId },
       data: { twoFactorEnabled: false, twoFactorSecret: null },
     });
+    await audit({ userId, action: "auth.2fa.disabled", req });
 
     res.json({ twoFactorEnabled: false });
   } catch (e) {

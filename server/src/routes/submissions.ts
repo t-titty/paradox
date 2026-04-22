@@ -2,16 +2,17 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../db.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
+import { cleanText } from "../lib/htmlSanitize.js";
 
 export const submissionsRouter = Router();
 
 const submitSchema = z.object({
-  title: z.string().min(2).max(200),
-  description: z.string().min(10).max(2000),
-  optionA: z.string().min(1).max(500),
-  optionB: z.string().min(1).max(500),
-  category: z.string().min(2).max(80),
-  reason: z.string().min(10).max(1000),
+  title: z.string().min(2).max(200).transform(cleanText),
+  description: z.string().min(10).max(2000).transform(cleanText),
+  optionA: z.string().min(1).max(500).transform(cleanText),
+  optionB: z.string().min(1).max(500).transform(cleanText),
+  category: z.string().min(2).max(80).transform(cleanText),
+  reason: z.string().min(10).max(1000).transform(cleanText),
 });
 
 /**

@@ -7,7 +7,7 @@ import { prisma } from "../db.js";
 import { HttpError } from "../middleware/error.js";
 import { requireAuth, signToken, type AuthedRequest } from "../middleware/auth.js";
 import { containsProfanity } from "../lib/profanity.js";
-import { userHasCircleAccess } from "../lib/circleAccess.js";
+import { userHasCircleAccess, userOwnsOrAdminsCircle } from "../lib/circleAccess.js";
 
 export const authRouter = Router();
 
@@ -61,10 +61,16 @@ type MeUser = {
   twoFactorEnabled: boolean;
 };
 
-// Wrap the DB row with the derived hasCircleAccess flag so the client can
-// render the paywall CTA without a second request.
+// Wrap the DB row with derived circle flags so the client can render the
+// paywall CTA and gate the MANAGE nav without a second request.
+// `hasCircleAccess` governs *creation*; `ownsOrAdminsCircle` governs nav
+// visibility (shown only to users with circles they can actually manage).
 async function withAccessFlags<T extends MeUser>(user: T) {
-  return { ...user, hasCircleAccess: await userHasCircleAccess(user.id) };
+  const [hasCircleAccess, ownsOrAdminsCircle] = await Promise.all([
+    userHasCircleAccess(user.id),
+    userOwnsOrAdminsCircle(user.id),
+  ]);
+  return { ...user, hasCircleAccess, ownsOrAdminsCircle };
 }
 
 function verifyTotp(secret: string, token: string): boolean {

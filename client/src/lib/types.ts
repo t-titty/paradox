@@ -29,6 +29,10 @@ export interface User {
   twoFactorEnabled?: boolean;
   /** Server-derived flag: granted by admin OR owns an active paid Circle. */
   hasCircleAccess?: boolean;
+  /** Server-derived flag: true iff user is OWNER or ADMIN on any Circle.
+   *  Distinct from hasCircleAccess — governs whether the MANAGE nav link
+   *  is shown, not whether the user can *create* a new circle. */
+  ownsOrAdminsCircle?: boolean;
 }
 
 export interface Paradox {

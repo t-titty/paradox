@@ -6,6 +6,7 @@ import { HttpError } from "../middleware/error.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { userHasCircleAccess } from "../lib/circleAccess.js";
 import { resolveLookupKey } from "../lib/pricing.js";
+import { getStripe } from "../lib/stripe.js";
 
 export const circlesRouter = Router();
 
@@ -572,6 +573,99 @@ circlesRouter.get("/:id/members", requireAuth, async (req, res, next) => {
       },
     });
     res.json({ members });
+  } catch (e) {
+    next(e);
+  }
+});
+
+/**
+ * DELETE /api/circles/:id
+ * Permanently delete a circle. OWNER only.
+ *
+ * We preserve per-user history by *nulling* `circleGameId` on Vote and Duel
+ * rows that belonged to games in this circle, so profile pages still show
+ * those votes/duels — they just stop being associated with the (now gone)
+ * circle. CircleGame → CircleInviteCode and Circle → CircleMembership both
+ * cascade per schema, so once votes/duels are detached we can safely delete
+ * the games and the circle itself.
+ *
+ * Stripe subscription (if any) is canceled BEFORE the local delete so a
+ * partial failure never leaves an orphaned paid subscription without a
+ * circle to bill against. Already-canceled subs are tolerated.
+ *
+ * After the delete, if the owner has no other circles at all, the
+ * `isGrantedCircleAccess` flag is revoked so they must re-subscribe or be
+ * re-granted before creating another one.
+ */
+circlesRouter.delete("/:id", requireAuth, async (req, res, next) => {
+  try {
+    const { userId } = req as AuthedRequest;
+    const circleId = req.params.id!;
+
+    const circle = await prisma.circle.findUnique({
+      where: { id: circleId },
+      select: {
+        id: true,
+        ownerId: true,
+        stripeSubscriptionId: true,
+        subscriptionStatus: true,
+      },
+    });
+    // Hide existence from non-owners — treat the same as not-found.
+    if (!circle || circle.ownerId !== userId) {
+      throw new HttpError(404, "Not found", "not_found");
+    }
+
+    if (circle.stripeSubscriptionId && circle.subscriptionStatus !== "canceled") {
+      const stripe = getStripe();
+      if (stripe) {
+        try {
+          await stripe.subscriptions.cancel(circle.stripeSubscriptionId);
+        } catch (err) {
+          const e = err as { type?: string; code?: string; message?: string };
+          const tolerable =
+            e?.type === "StripeInvalidRequestError" &&
+            (e.code === "resource_missing" ||
+              /cancel/i.test(e.message ?? ""));
+          if (!tolerable) throw err;
+        }
+      }
+    }
+
+    await prisma.$transaction(async (tx) => {
+      const games = await tx.circleGame.findMany({
+        where: { circleId },
+        select: { id: true },
+      });
+      const gameIds = games.map((g) => g.id);
+      if (gameIds.length > 0) {
+        // Vote.circleGame and Duel.circleGame are already onDelete:SetNull,
+        // but do it explicitly so the history-preservation intent is visible
+        // in the code and survives any future relation change.
+        await tx.vote.updateMany({
+          where: { circleGameId: { in: gameIds } },
+          data: { circleGameId: null },
+        });
+        await tx.duel.updateMany({
+          where: { circleGameId: { in: gameIds } },
+          data: { circleGameId: null },
+        });
+        // CircleInviteCode → CircleGame is onDelete:Cascade.
+        await tx.circleGame.deleteMany({ where: { circleId } });
+      }
+      // CircleMembership → Circle is onDelete:Cascade.
+      await tx.circle.delete({ where: { id: circleId } });
+    });
+
+    const remaining = await prisma.circle.count({ where: { ownerId: userId } });
+    if (remaining === 0) {
+      await prisma.user.update({
+        where: { id: userId },
+        data: { isGrantedCircleAccess: false },
+      });
+    }
+
+    res.status(204).end();
   } catch (e) {
     next(e);
   }

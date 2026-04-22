@@ -23,3 +23,17 @@ export async function userHasCircleAccess(userId: string): Promise<boolean> {
   });
   return Boolean(paidCircle);
 }
+
+/**
+ * True iff the user holds an OWNER or ADMIN membership on at least one
+ * Circle. Drives visibility of the "MANAGE" nav link — base users and plain
+ * members don't see it. Distinct from userHasCircleAccess, which governs
+ * *creation* of new circles (paid-tier or admin-granted).
+ */
+export async function userOwnsOrAdminsCircle(userId: string): Promise<boolean> {
+  const m = await prisma.circleMembership.findFirst({
+    where: { userId, role: { in: ["OWNER", "ADMIN"] } },
+    select: { id: true },
+  });
+  return Boolean(m);
+}

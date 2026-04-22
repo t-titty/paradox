@@ -94,7 +94,7 @@ export function CirclesManagePage() {
 /* ---------- LIST ---------- */
 
 function CircleListView() {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const hasAccess = Boolean(user?.hasCircleAccess);
   const [circles, setCircles] = useState<CircleSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -108,6 +108,13 @@ function CircleListView() {
     } catch (e) {
       setError(errorMessage(e, "Could not load your circles."));
     }
+  }
+
+  async function onCircleDeleted() {
+    // Reload the list AND refresh the user so ownsOrAdminsCircle /
+    // hasCircleAccess reflect the new state (MANAGE nav link will hide if
+    // this was the last circle they owned).
+    await Promise.all([load(), refreshUser()]);
   }
 
   useEffect(() => {
@@ -158,29 +165,39 @@ function CircleListView() {
       ) : (
         <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {circles.map((c) => (
-            <Link
+            <div
               key={c.id}
-              to={`/circles/manage/${c.id}`}
-              className="border-2 border-bone p-5 hover:border-gold"
+              className="group relative border-2 border-bone focus-within:border-gold hover:border-gold"
             >
-              <div className="flex items-baseline justify-between gap-2">
-                <p className="brutal-heading text-xl text-bone md:text-2xl">
-                  {c.name.toUpperCase()}
+              <Link to={`/circles/manage/${c.id}`} className="block p-5">
+                <div className="flex items-baseline justify-between gap-2">
+                  <p className="brutal-heading text-xl text-bone md:text-2xl">
+                    {c.name.toUpperCase()}
+                  </p>
+                  <RoleBadge role={c.role} />
+                </div>
+                <p className="mt-1 font-mono text-xs uppercase tracking-brutal text-muted">
+                  {TYPE_LABEL[c.type]} · {c.subscriptionStatus.toUpperCase()}
                 </p>
-                <RoleBadge role={c.role} />
-              </div>
-              <p className="mt-1 font-mono text-xs uppercase tracking-brutal text-muted">
-                {TYPE_LABEL[c.type]} · {c.subscriptionStatus.toUpperCase()}
-              </p>
-              <div className="mt-4 grid grid-cols-2 gap-2 font-mono text-xs uppercase tracking-brutal text-muted">
-                <span>
-                  <span className="text-gold">{c.memberCount}</span> MEMBERS
-                </span>
-                <span>
-                  <span className="text-gold">{c.gameCount}</span> GAMES
-                </span>
-              </div>
-            </Link>
+                <div className="mt-4 grid grid-cols-2 gap-2 font-mono text-xs uppercase tracking-brutal text-muted">
+                  <span>
+                    <span className="text-gold">{c.memberCount}</span> MEMBERS
+                  </span>
+                  <span>
+                    <span className="text-gold">{c.gameCount}</span> GAMES
+                  </span>
+                </div>
+              </Link>
+              {c.role === "OWNER" && (
+                <div className="border-t border-smoke px-5 py-3">
+                  <DeleteCircleButton
+                    circleId={c.id}
+                    circleName={c.name}
+                    onDeleted={onCircleDeleted}
+                  />
+                </div>
+              )}
+            </div>
           ))}
         </section>
       )}
@@ -894,6 +911,100 @@ function RemoveButton({
     >
       REMOVE
     </button>
+  );
+}
+
+function DeleteCircleButton({
+  circleId,
+  circleName,
+  onDeleted,
+}: {
+  circleId: string;
+  circleName: string;
+  onDeleted: () => void | Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function confirmDelete() {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.delete(`/circles/${circleId}`);
+      setOpen(false);
+      await onDeleted();
+    } catch (e) {
+      setError(errorMessage(e, "Could not delete the circle."));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setOpen(true);
+        }}
+        className="font-mono text-xs uppercase tracking-brutal text-muted hover:text-blood"
+      >
+        DELETE CIRCLE
+      </button>
+      {open && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={`delete-circle-title-${circleId}`}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-ink/80 px-4"
+          onClick={() => {
+            if (!busy) setOpen(false);
+          }}
+        >
+          <div
+            className="w-full max-w-lg border-2 border-blood bg-ink p-6 md:p-8"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p
+              id={`delete-circle-title-${circleId}`}
+              className="brutal-heading text-2xl text-blood md:text-3xl"
+            >
+              DELETE {circleName.toUpperCase()}?
+            </p>
+            <p className="mt-4 font-mono text-sm text-bone md:text-base">
+              This will permanently delete the circle and all its games. Member
+              vote and duel history will be preserved on their profiles but will
+              no longer be associated with this circle. This cannot be undone.
+            </p>
+            {error && (
+              <p className="mt-4 border-2 border-blood p-3 font-mono text-sm text-blood">
+                {error}
+              </p>
+            )}
+            <div className="mt-6 flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={confirmDelete}
+                disabled={busy}
+                className="brutal-btn brutal-btn-blood"
+              >
+                {busy ? "DELETING..." : "DELETE CIRCLE"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                disabled={busy}
+                className="brutal-btn"
+              >
+                CANCEL
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 

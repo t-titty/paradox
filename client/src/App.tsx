@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { Header } from "./components/Header.tsx";
 import { TestModeBanner } from "./components/TestModeBanner.tsx";
 import { ProtectedRoute } from "./components/ProtectedRoute.tsx";
+import { CirclesManageGuard } from "./components/CirclesManageGuard.tsx";
 import { TestModeProvider } from "./context/TestModeContext.tsx";
 import { LoginPage } from "./pages/LoginPage.tsx";
 import { RegisterPage } from "./pages/RegisterPage.tsx";
@@ -117,7 +118,9 @@ export default function App() {
             path="/circles/manage"
             element={
               <ProtectedRoute>
-                <CirclesManagePage />
+                <CirclesManageGuard>
+                  <CirclesManagePage />
+                </CirclesManageGuard>
               </ProtectedRoute>
             }
           />
@@ -125,7 +128,9 @@ export default function App() {
             path="/circles/manage/:circleId"
             element={
               <ProtectedRoute>
-                <CirclesManagePage />
+                <CirclesManageGuard>
+                  <CirclesManagePage />
+                </CirclesManageGuard>
               </ProtectedRoute>
             }
           />

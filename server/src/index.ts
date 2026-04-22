@@ -51,8 +51,13 @@ app.use(
       useDefaults: true,
       directives: {
         "default-src": ["'self'"],
-        "script-src": ["'self'", "https://js.stripe.com"],
-        "connect-src": ["'self'", "https://api.stripe.com", "ws:", "wss:"],
+        "script-src": ["'self'", "'unsafe-inline'", "https://js.stripe.com"],
+        "connect-src": [
+          "'self'",
+          "https://api.stripe.com",
+          "ws:",
+          "wss:",
+        ],
         "frame-src": [
           "'self'",
           "https://js.stripe.com",

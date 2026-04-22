@@ -1,4 +1,5 @@
 import { createServer } from "node:http";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import express from "express";
@@ -126,11 +127,36 @@ app.use(express.json({ limit: "64kb" }));
 
 // In production, resolve the built client path so both the static asset
 // middleware (mounted next) and the SPA catch-all (mounted last) share it.
-// At runtime this file is server/dist/index.js, so client/dist is ../../.
-const clientDist =
-  env.NODE_ENV === "production"
-    ? path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../client/dist")
-    : null;
+// Try several candidates because the runtime layout depends on where the
+// process is started (Railway/Nixpacks runs from the repo root via the
+// workspace script; locally we also run from /server). The first path that
+// exists wins; if none do, clientDist stays null and the SPA routes no-op.
+function resolveClientDist(): string | null {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const cwd = process.cwd();
+  const candidates = [
+    // Monorepo layout: server/dist/index.js → ../../client/dist
+    path.resolve(here, "../../client/dist"),
+    // Deeper nesting (some bundlers)
+    path.resolve(here, "../../../client/dist"),
+    // cwd is the repo root (Railway default)
+    path.resolve(cwd, "client/dist"),
+    // cwd is the server workspace
+    path.resolve(cwd, "../client/dist"),
+  ];
+  for (const candidate of candidates) {
+    if (existsSync(path.join(candidate, "index.html"))) return candidate;
+  }
+  return null;
+}
+
+const clientDist = env.NODE_ENV === "production" ? resolveClientDist() : null;
+if (env.NODE_ENV === "production") {
+  console.log(
+    `[paradox] clientDist=${clientDist ?? "NOT FOUND"}` +
+      ` (cwd=${process.cwd()}, __dirname=${path.dirname(fileURLToPath(import.meta.url))})`,
+  );
+}
 
 // Serve hashed bundles (/assets/*) and other built files BEFORE any API
 // routes or the catch-all, so express.static sets the right MIME type

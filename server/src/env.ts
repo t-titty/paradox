@@ -15,6 +15,20 @@ const schema = z.object({
   JWT_SECRET: z.string().min(32, "JWT_SECRET must be at least 32 characters"),
   JWT_EXPIRES_IN: z.string().default("7d"),
   JWT_EXPIRES_IN_REMEMBER: z.string().default("30d"),
+  // Stripe. Optional in dev so the server still boots without a key set;
+  // the stripe endpoints 503 when unconfigured. Treat empty strings as
+  // unset so a .env that ships `STRIPE_SECRET_KEY=` still counts as blank.
+  STRIPE_SECRET_KEY: z
+    .string()
+    .optional()
+    .transform((v) => (v && v.length > 0 ? v : undefined)),
+  STRIPE_WEBHOOK_SECRET: z
+    .string()
+    .optional()
+    .transform((v) => (v && v.length > 0 ? v : undefined)),
+  // Public-facing URL the Stripe success/cancel pages redirect back to.
+  // Defaults to localhost in dev.
+  PUBLIC_APP_URL: z.string().url().default("http://localhost:5173"),
   ANTHROPIC_API_KEY: z.string().min(1),
   ANTHROPIC_MODEL: z.string().default("claude-sonnet-4-6"),
   PHASE_DROP_HOUR: z.coerce.number().int().min(0).max(23).default(8),

@@ -280,9 +280,20 @@ model Circle {
   name               String
   type               CircleType
   ownerId            String
-  // Free-form for now; Stripe pass will populate with "active" | "past_due" |
-  // "canceled" | etc. "trial" means the circle exists but hasn't paid.
+  // Stripe lifecycle. "trial" (or "pending") until the checkout.session.completed
+  // webhook flips it to "active". "past_due" on invoice.payment_failed;
+  // "canceled" on subscription.deleted.
   subscriptionStatus String   @default("trial")
+  stripeCustomerId      String?
+  stripeSubscriptionId  String?  @unique
+  // Stable key from the server pricing catalogue, e.g. JR_HIGH_STANDARD_MONTHLY.
+  // Lets us render the plan name + intent without round-tripping Stripe.
+  stripePriceLookupKey  String?
+  // "monthly" | "6month" | "annual". Mirrors the catalogue billing choice.
+  billingPeriod         String?
+  // Null = unlimited (CORPORATE_ENTERPRISE tier).
+  seatLimit             Int?
+  currentPeriodEnd      DateTime?
   // Reserved for per-Circle defaults (e.g. default schedule overrides).
   settings           Json     @default("{}")
   createdAt          DateTime @default(now())
@@ -292,6 +303,7 @@ model Circle {
   games       CircleGame[]
 
   @@index([ownerId])
+  @@index([stripeCustomerId])
 }
 
 model CircleMembership {

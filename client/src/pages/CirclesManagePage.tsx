@@ -49,6 +49,13 @@ interface CircleDetail {
   name: string;
   type: CircleType;
   subscriptionStatus: string;
+  stripePriceLookupKey: string | null;
+  billingPeriod: string | null;
+  seatLimit: number | null;
+  currentPeriodEnd: string | null;
+  planLabel: string | null;
+  hasStripeCustomer: boolean;
+  memberCount: number;
   createdAt: string;
   ownerId: string;
   games: Game[];
@@ -459,11 +466,177 @@ function CircleDetailView({ circleId }: { circleId: string }) {
       </section>
 
       {viewer.role === "OWNER" && (
-        <p className="font-mono text-xs uppercase tracking-brutal text-muted">
-          Billing + seat controls arrive with the Stripe pass.
-        </p>
+        <SubscriptionPanel circle={circle} members={members.length} />
       )}
     </Shell>
+  );
+}
+
+function SubscriptionPanel({
+  circle,
+  members,
+}: {
+  circle: CircleDetail;
+  members: number;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function openPortal() {
+    setBusy(true);
+    setError(null);
+    try {
+      const { data } = await api.post<{ url: string }>("/stripe/portal", {
+        circleId: circle.id,
+      });
+      window.location.href = data.url;
+    } catch (e) {
+      setError(errorMessage(e, "Could not open the billing portal."));
+      setBusy(false);
+    }
+  }
+
+  const seatText =
+    circle.seatLimit === null
+      ? `${members} / UNLIMITED`
+      : `${members} / ${circle.seatLimit.toLocaleString()}`;
+  const overLimit =
+    circle.seatLimit !== null && members >= circle.seatLimit;
+
+  const status = circle.subscriptionStatus.toLowerCase();
+  const statusColor =
+    status === "active" || status === "trialing"
+      ? "border-gold text-gold"
+      : status === "past_due"
+        ? "border-blood text-blood"
+        : status === "canceled"
+          ? "border-blood text-blood"
+          : "border-smoke text-muted";
+  const billingLabel =
+    circle.billingPeriod === "monthly"
+      ? "BILLED MONTHLY"
+      : circle.billingPeriod === "6month"
+        ? "BILLED EVERY 6 MONTHS"
+        : circle.billingPeriod === "annual"
+          ? "BILLED ANNUALLY"
+          : null;
+
+  return (
+    <section className="flex flex-col gap-4">
+      <h2 className="brutal-heading border-b-2 border-smoke pb-3 text-xl text-bone md:text-2xl">
+        SUBSCRIPTION
+      </h2>
+
+      {status === "past_due" && (
+        <div className="border-2 border-blood p-4">
+          <p className="brutal-heading text-sm text-blood">PAYMENT FAILED.</p>
+          <p className="mt-2 font-mono text-sm text-bone">
+            Your last invoice didn't go through. Update your card in the billing portal
+            before the next retry to keep the circle active.
+          </p>
+        </div>
+      )}
+      {status === "canceled" && (
+        <div className="border-2 border-blood p-4">
+          <p className="brutal-heading text-sm text-blood">SUBSCRIPTION CANCELED.</p>
+          <p className="mt-2 font-mono text-sm text-bone">
+            This circle will stop accepting new activity when the current period ends.
+            Re-subscribe from the pricing page.
+          </p>
+        </div>
+      )}
+
+      <div className="border-2 border-bone p-5 md:p-6">
+        <div className="flex flex-wrap items-baseline justify-between gap-3">
+          <div>
+            <p className="font-mono text-xs uppercase tracking-brutal text-muted">CURRENT PLAN</p>
+            <p className="brutal-heading mt-1 text-xl text-bone md:text-2xl">
+              {circle.planLabel ? circle.planLabel.toUpperCase() : "ADMIN-GRANTED"}
+            </p>
+            {billingLabel && (
+              <p className="mt-1 font-mono text-xs uppercase tracking-brutal text-muted">
+                {billingLabel}
+              </p>
+            )}
+          </div>
+          <span
+            className={`border-2 px-3 py-1 font-mono text-xs uppercase tracking-brutal ${statusColor}`}
+          >
+            {circle.subscriptionStatus.toUpperCase().replace("_", " ")}
+          </span>
+        </div>
+
+        <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-3">
+          <Cell label="SEATS USED" value={seatText} tone={overLimit ? "blood" : "bone"} />
+          <Cell
+            label="NEXT BILLING"
+            value={
+              circle.currentPeriodEnd
+                ? new Date(circle.currentPeriodEnd).toLocaleDateString()
+                : "—"
+            }
+            tone="bone"
+          />
+          <Cell
+            label="BILLING PORTAL"
+            value={circle.hasStripeCustomer ? "AVAILABLE" : "—"}
+            tone={circle.hasStripeCustomer ? "gold" : "muted"}
+          />
+        </div>
+
+        {error && (
+          <p className="mt-4 border-2 border-blood p-3 font-mono text-sm text-blood">
+            {error}
+          </p>
+        )}
+
+        <div className="mt-5 flex flex-wrap gap-3">
+          {circle.hasStripeCustomer ? (
+            <button
+              onClick={openPortal}
+              disabled={busy}
+              className="brutal-btn brutal-btn-gold"
+            >
+              {busy ? "..." : "MANAGE BILLING"}
+            </button>
+          ) : (
+            <Link to="/pricing" className="brutal-btn brutal-btn-gold">
+              SUBSCRIBE
+            </Link>
+          )}
+          {overLimit && (
+            <span className="font-mono text-xs uppercase tracking-brutal text-blood self-center">
+              SEAT LIMIT REACHED · UPGRADE TO ADD MORE
+            </span>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function Cell({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone: "bone" | "gold" | "blood" | "muted";
+}) {
+  const v =
+    tone === "gold"
+      ? "text-gold"
+      : tone === "blood"
+        ? "text-blood"
+        : tone === "muted"
+          ? "text-muted"
+          : "text-bone";
+  return (
+    <div className="border border-smoke p-3">
+      <p className="font-mono text-xs uppercase tracking-brutal text-muted">{label}</p>
+      <p className={`brutal-heading mt-1 text-xl ${v}`}>{value}</p>
+    </div>
   );
 }
 

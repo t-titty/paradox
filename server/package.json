@@ -13,7 +13,8 @@
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
-    "db:reset": "prisma migrate reset --force"
+    "db:reset": "prisma migrate reset --force",
+    "stripe:sync": "tsx src/scripts/stripeSync.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -30,6 +31,7 @@
     "qrcode": "^1.5.4",
     "socket.io": "^4.8.1",
     "speakeasy": "^2.0.0",
+    "stripe": "^22.0.2",
     "zod": "^3.24.1"
   },
   "devDependencies": {

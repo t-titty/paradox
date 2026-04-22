@@ -18,12 +18,19 @@ import { circlesRouter } from "./routes/circles.js";
 import { feedbackRouter } from "./routes/feedback.js";
 import { submissionsRouter } from "./routes/submissions.js";
 import { adminRouter } from "./routes/admin.js";
+import { stripeRouter } from "./routes/stripe.js";
+import { stripeWebhookRouter } from "./routes/stripeWebhook.js";
 import { errorHandler } from "./middleware/error.js";
 import { createSocketServer } from "./sockets/index.js";
 
 const app = express();
 
 app.use(cors());
+
+// Stripe webhooks require the raw request body for signature verification,
+// so this route MUST be mounted before the global express.json() below.
+app.use("/api/webhooks/stripe", stripeWebhookRouter);
+
 app.use(express.json({ limit: "64kb" }));
 
 app.get("/api/health", (_req, res) => {
@@ -40,6 +47,7 @@ app.use("/api/profile", profileRouter);
 app.use("/api/flashback", flashbackRouter);
 app.use("/api/library", libraryRouter);
 app.use("/api/circles", circlesRouter);
+app.use("/api/stripe", stripeRouter);
 app.use("/api/feedback", feedbackRouter);
 app.use("/api/submissions", submissionsRouter);
 app.use("/api/admin", adminRouter);

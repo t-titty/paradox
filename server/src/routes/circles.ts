@@ -5,6 +5,7 @@ import { prisma } from "../db.js";
 import { HttpError } from "../middleware/error.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { userHasCircleAccess } from "../lib/circleAccess.js";
+import { resolveLookupKey } from "../lib/pricing.js";
 
 export const circlesRouter = Router();
 
@@ -218,6 +219,11 @@ circlesRouter.get("/:id", requireAuth, async (req, res, next) => {
         name: true,
         type: true,
         subscriptionStatus: true,
+        stripePriceLookupKey: true,
+        billingPeriod: true,
+        seatLimit: true,
+        currentPeriodEnd: true,
+        stripeCustomerId: true,
         createdAt: true,
         ownerId: true,
         games: {
@@ -254,8 +260,21 @@ circlesRouter.get("/:id", requireAuth, async (req, res, next) => {
     });
     if (!circle) throw new HttpError(404, "Not found", "not_found");
 
+    // Derive display-friendly subscription fields from the raw Stripe keys.
+    const resolved = circle.stripePriceLookupKey
+      ? resolveLookupKey(circle.stripePriceLookupKey)
+      : null;
+    const planLabel = resolved ? `${resolved.plan.tabLabel} ${resolved.plan.tierName}` : null;
+    const memberCount = circle._count.memberships;
+    const { stripeCustomerId: _stripeCustomerId, ...circleOut } = circle;
+
     res.json({
-      circle,
+      circle: {
+        ...circleOut,
+        planLabel,
+        memberCount,
+        hasStripeCustomer: Boolean(circle.stripeCustomerId),
+      },
       viewer: { role: m.role, isManager },
     });
   } catch (e) {

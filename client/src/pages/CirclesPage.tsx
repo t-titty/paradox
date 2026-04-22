@@ -120,7 +120,7 @@ export function CirclesPage() {
       {/* Colosseum — live party mode. Bold, separate section to read as a
           distinct product, not another Circle tier. */}
       <section className="border-2 border-bone p-5 md:p-6">
-        <p className="brutal-heading text-xs text-gold">PARTY MODE</p>
+        <p className="brutal-heading text-xs text-gold">THE COLOSSEUM</p>
         <h2 className="brutal-heading mt-3 text-4xl text-bone md:text-6xl">
           THE COLOSSEUM.
         </h2>
@@ -152,14 +152,14 @@ export function CirclesPage() {
 
         <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
           <article className="border-2 border-bone p-4">
-            <p className="brutal-heading text-xs text-gold">PARTY BASIC — $9.99/MO</p>
+            <p className="brutal-heading text-xs text-gold">COLOSSEUM BASIC — $9.99/MO</p>
             <p className="mt-2 font-mono text-sm text-bone">
               1-hour free trial, no card · then unlimited games · up to 8
               players · standard paradox pack
             </p>
           </article>
           <article className="border-2 border-gold p-4">
-            <p className="brutal-heading text-xs text-gold">PARTY PRO — $29.99/MO</p>
+            <p className="brutal-heading text-xs text-gold">COLOSSEUM PRO — $29.99/MO</p>
             <p className="mt-2 font-mono text-sm text-bone">
               1-hour free trial, no card · then unlimited games · up to 25
               players · all paradox packs · full game history

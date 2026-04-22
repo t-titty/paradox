@@ -15,7 +15,7 @@ export function PartyPage() {
     <div className="mx-auto flex max-w-3xl flex-col gap-8 px-4 py-10 md:gap-10 md:px-6 md:py-16">
       <header>
         <p className="font-mono text-xs uppercase tracking-brutal text-gold">
-          PARTY MODE
+          THE COLOSSEUM
         </p>
         <h1 className="brutal-heading mt-3 text-5xl text-bone md:text-7xl">
           THE COLOSSEUM.
@@ -28,18 +28,18 @@ export function PartyPage() {
 
       <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <article className="border-2 border-bone p-4 md:p-5">
-          <p className="brutal-heading text-xs text-gold">PARTY BASIC — $9.99/MO</p>
+          <p className="brutal-heading text-xs text-gold">COLOSSEUM BASIC — $9.99/MO</p>
           <p className="mt-2 font-mono text-sm text-bone">
-            1-hour free trial, no card. Then $9.99/month for unlimited party
-            games. Up to 8 players per game. Standard paradox pack.
+            1-hour free trial, no card. Then $9.99/month for unlimited games.
+            Up to 8 players per game. Standard paradox pack.
           </p>
         </article>
         <article className="border-2 border-gold p-4 md:p-5">
-          <p className="brutal-heading text-xs text-gold">PARTY PRO — $29.99/MO</p>
+          <p className="brutal-heading text-xs text-gold">COLOSSEUM PRO — $29.99/MO</p>
           <p className="mt-2 font-mono text-sm text-bone">
-            1-hour free trial, no card. Then $29.99/month for unlimited party
-            games. Up to 25 players per game. All paradox packs. Full game
-            history saved to your profile.
+            1-hour free trial, no card. Then $29.99/month for unlimited games.
+            Up to 25 players per game. All paradox packs. Full game history
+            saved to your profile.
           </p>
         </article>
       </section>

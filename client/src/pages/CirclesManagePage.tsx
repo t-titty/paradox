@@ -231,7 +231,7 @@ function CircleListView() {
 function ColosseumSection() {
   return (
     <section className="border-2 border-gold p-5 md:p-6">
-      <p className="brutal-heading text-xs text-gold">PARTY MODE</p>
+      <p className="brutal-heading text-xs text-gold">THE COLOSSEUM</p>
       <h2 className="brutal-heading mt-3 text-3xl text-bone md:text-4xl">
         THE COLOSSEUM.
       </h2>
@@ -240,10 +240,10 @@ function ColosseumSection() {
         A live party game running on top of your circle.
       </p>
       <p className="mt-3 font-mono text-xs uppercase tracking-brutal text-muted">
-        PARTY BASIC ($9.99/MO): 1-HOUR FREE TRIAL · THEN UNLIMITED · 8 PLAYERS
+        COLOSSEUM BASIC ($9.99/MO): 1-HOUR FREE TRIAL · THEN UNLIMITED · 8 PLAYERS
       </p>
       <p className="font-mono text-xs uppercase tracking-brutal text-muted">
-        PARTY PRO ($29.99/MO): 1-HOUR FREE TRIAL · THEN UNLIMITED · 25 PLAYERS · ALL PACKS
+        COLOSSEUM PRO ($29.99/MO): 1-HOUR FREE TRIAL · THEN UNLIMITED · 25 PLAYERS · ALL PACKS
       </p>
       <p className="font-mono text-[10px] uppercase tracking-brutal text-muted">
         ONE TRIAL PER ACCOUNT — BASIC AND PRO SHARE A SINGLE 1-HOUR TRIAL.

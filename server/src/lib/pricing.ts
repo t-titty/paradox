@@ -377,27 +377,27 @@ export interface FeaturePlan {
 export const FEATURE_PLANS: FeaturePlan[] = [
   {
     key: "PARTY_BASIC",
-    name: "Party Basic",
+    name: "Colosseum Basic",
     tagline:
       "Try free for 1 hour — no card. Then $9.99/month for unlimited hosting.",
     monthlyUsd: 9.99,
     features: [
       "1 hour free trial — no credit card",
-      "Unlimited party games after subscribing",
+      "Unlimited games after subscribing",
       "Up to 8 players per game",
       "Standard paradox pack",
     ],
   },
   {
     key: "PARTY_PRO",
-    name: "Party Pro",
+    name: "Colosseum Pro",
     tagline:
       "Try free for 1 hour — no card. Then $29.99/month for the full Colosseum.",
     monthlyUsd: 29.99,
     popular: true,
     features: [
       "1 hour free trial — no credit card",
-      "Unlimited party games after subscribing",
+      "Unlimited games after subscribing",
       "Up to 25 players per game",
       "All paradox packs included",
       "Full game history",

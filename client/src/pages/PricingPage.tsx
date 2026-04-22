@@ -172,7 +172,7 @@ export function PricingPage() {
 
       <p className="font-mono text-xs uppercase tracking-brutal text-muted">
         {tab === "PARTY"
-          ? "Party Pro billed monthly in USD via Stripe. Cancel anytime from the billing portal."
+          ? "The Colosseum plans are billed monthly in USD via Stripe. Cancel anytime from the billing portal."
           : "All plans billed in USD via Stripe. 6-month and annual plans are charged as a single upfront payment; monthly plans renew automatically every month."}
       </p>
 
@@ -206,7 +206,7 @@ function PartyTierCard({
       )}
       <div>
         <p className="font-mono text-xs uppercase tracking-brutal text-gold">
-          PARTY · {plan.name.toUpperCase()}
+          {plan.name.toUpperCase()}
         </p>
         <span className="mt-2 inline-block border-2 border-gold px-2 py-1 font-mono text-[10px] uppercase tracking-brutal text-gold">
           1 HOUR FREE TRIAL
@@ -309,7 +309,7 @@ function CheckoutModal({
   const isCircle = target.kind === "circle";
   const headerLabel = isCircle
     ? `${target.plan.tabLabel.toUpperCase()} · ${target.plan.tierName.toUpperCase()}`
-    : `PARTY · ${target.plan.name.toUpperCase()}`;
+    : target.plan.name.toUpperCase();
   const priceLabel = isCircle
     ? `${formatDollars(amountFor(target.plan, target.billing))} ${periodSuffix(target.billing)}`
     : `${formatDollars(target.plan.monthlyUsd)} /MO`;

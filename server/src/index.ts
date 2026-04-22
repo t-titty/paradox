@@ -1,5 +1,4 @@
 import { createServer } from "node:http";
-import { existsSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import express from "express";
@@ -52,13 +51,8 @@ app.use(
       useDefaults: true,
       directives: {
         "default-src": ["'self'"],
-        "script-src": ["'self'", "'unsafe-inline'", "https://js.stripe.com"],
-        "connect-src": [
-          "'self'",
-          "https://api.stripe.com",
-          "ws:",
-          "wss:",
-        ],
+        "script-src": ["'self'", "https://js.stripe.com"],
+        "connect-src": ["'self'", "https://api.stripe.com", "ws:", "wss:"],
         "frame-src": [
           "'self'",
           "https://js.stripe.com",
@@ -66,16 +60,8 @@ app.use(
           "https://checkout.stripe.com",
         ],
         "img-src": ["'self'", "data:"],
-        "style-src": [
-          "'self'",
-          "'unsafe-inline'",
-          "https://fonts.googleapis.com",
-        ],
-        "font-src": [
-          "'self'",
-          "data:",
-          "https://fonts.gstatic.com",
-        ],
+        "style-src": ["'self'", "'unsafe-inline'"],
+        "font-src": ["'self'", "data:"],
         "object-src": ["'none'"],
         "base-uri": ["'self'"],
         "form-action": ["'self'", "https://checkout.stripe.com"],
@@ -125,111 +111,6 @@ app.use("/api/webhooks/stripe", stripeWebhookRouter);
 
 app.use(express.json({ limit: "64kb" }));
 
-// In production, resolve the built client path so both the static asset
-// middleware (mounted next) and the SPA catch-all (mounted last) share it.
-// Try several candidates because the runtime layout depends on where the
-// process is started (Railway/Nixpacks runs from the repo root via the
-// workspace script; locally we also run from /server). The first path that
-// exists wins; if none do, clientDist stays null and the SPA routes no-op.
-const __dirname_ = path.dirname(fileURLToPath(import.meta.url));
-
-function countFilesRecursive(dir: string): number {
-  let count = 0;
-  try {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      if (entry.isDirectory()) {
-        count += countFilesRecursive(path.join(dir, entry.name));
-      } else {
-        count += 1;
-      }
-    }
-  } catch {
-    // ignore — dir might not exist or be unreadable
-  }
-  return count;
-}
-
-function resolveClientDist(): string | null {
-  const cwd = process.cwd();
-  const candidates = [
-    // Monorepo layout: server/dist/index.js → ../../client/dist
-    path.resolve(__dirname_, "../../client/dist"),
-    // Deeper nesting (some bundlers)
-    path.resolve(__dirname_, "../../../client/dist"),
-    // cwd is the repo root (Railway default when started from root)
-    path.resolve(cwd, "client/dist"),
-    // cwd is the server workspace (Railway starts via `npm --workspace server`)
-    path.resolve(cwd, "../client/dist"),
-  ];
-  console.log(`[paradox][static] cwd=${cwd} __dirname=${__dirname_}`);
-  for (const candidate of candidates) {
-    const indexHtml = path.join(candidate, "index.html");
-    const indexExists = existsSync(indexHtml);
-    console.log(
-      `[paradox][static] candidate=${candidate} indexHtml=${indexExists ? "yes" : "no"}`,
-    );
-    if (indexExists) return candidate;
-  }
-  return null;
-}
-
-const clientDist = env.NODE_ENV === "production" ? resolveClientDist() : null;
-if (env.NODE_ENV === "production") {
-  if (clientDist) {
-    const assetsDir = path.join(clientDist, "assets");
-    const assetsExists = existsSync(assetsDir);
-    const totalFiles = countFilesRecursive(clientDist);
-    const assetFiles = assetsExists ? countFilesRecursive(assetsDir) : 0;
-    const sampleAssets = assetsExists
-      ? readdirSync(assetsDir).slice(0, 10).join(", ")
-      : "(none)";
-    console.log(
-      `[paradox][static] resolved=${clientDist} totalFiles=${totalFiles}` +
-        ` assetsDir=${assetsExists ? "yes" : "MISSING"} assetFiles=${assetFiles}` +
-        ` sample=[${sampleAssets}]`,
-    );
-    if (!assetsExists || assetFiles === 0) {
-      console.error(
-        "[paradox][static] WARNING: client/dist resolved but assets/ is empty or missing." +
-          " The Vite build probably didn't run — check the build step in railway.toml/nixpacks.toml.",
-      );
-    }
-  } else {
-    // Last-ditch diagnostic: list what IS around the places we looked so we
-    // can see in Railway logs whether the client was even shipped.
-    for (const probe of [__dirname_, path.resolve(__dirname_, ".."), path.resolve(__dirname_, "../.."), process.cwd()]) {
-      try {
-        const entries = readdirSync(probe)
-          .slice(0, 20)
-          .map((name) => {
-            try {
-              return statSync(path.join(probe, name)).isDirectory() ? `${name}/` : name;
-            } catch {
-              return name;
-            }
-          })
-          .join(", ");
-        console.error(`[paradox][static] probe ${probe} → [${entries}]`);
-      } catch (err) {
-        console.error(`[paradox][static] probe ${probe} → unreadable (${(err as Error).message})`);
-      }
-    }
-    console.error(
-      "[paradox][static] FATAL: client/dist not found. SPA will not be served." +
-        " Ensure `npm run build` at repo root runs `vite build` and outputs to client/dist.",
-    );
-  }
-}
-
-// Serve hashed bundles (/assets/*) and other built files BEFORE any API
-// routes or the catch-all, so express.static sets the right MIME type
-// (text/css, application/javascript, etc.) and doesn't fall through to the
-// error handler. `fallthrough: true` is the default — unknown paths still
-// continue to the API routes below.
-if (clientDist) {
-  app.use(express.static(clientDist, { index: false }));
-}
-
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, env: env.NODE_ENV, testMode: env.TEST_MODE });
 });
@@ -252,19 +133,17 @@ app.use("/api/feedback", generalLimiter, feedbackRouter);
 app.use("/api/submissions", generalLimiter, submissionsRouter);
 app.use("/api/admin", generalLimiter, adminRouter);
 
-// A missing /assets/* file must NOT fall through to the SPA catch-all — if
-// it did, the browser would receive index.html (HTML) while expecting CSS
-// or JS, breaking the page with a MIME type mismatch. Return 404 instead.
-app.get(/^\/assets\//, (_req, res) => {
-  res.status(404).type("text/plain").send("Not Found");
-});
-
-// SPA fallback. Anything else that isn't /api or /socket.io falls through
-// to index.html so client-side routes work on refresh.
-if (clientDist) {
-  const indexHtmlPath = path.join(clientDist, "index.html");
+// In production, serve the built client from the same origin. The client
+// is built to client/dist; at runtime this file is server/dist/index.js,
+// so the path is ../../client/dist.
+if (env.NODE_ENV === "production") {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const clientDist = path.resolve(here, "../../client/dist");
+  app.use(express.static(clientDist));
+  // SPA fallback. Anything that isn't an /api or /socket.io request falls
+  // through to index.html so client-side routes work on refresh.
   app.get(/^\/(?!api\/|socket\.io\/).*/, (_req, res) => {
-    res.sendFile(indexHtmlPath);
+    res.sendFile(path.join(clientDist, "index.html"));
   });
 }
 

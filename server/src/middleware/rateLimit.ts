@@ -1,4 +1,4 @@
-import rateLimit, { ipKeyGenerator } from "express-rate-limit";
+import rateLimit from "express-rate-limit";
 
 /**
  * Rate-limit middlewares. All use the default in-memory store — single
@@ -34,8 +34,7 @@ export const oracleLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req) => {
     const userId = (req as unknown as { userId?: string }).userId;
-    if (userId) return userId;
-    return ipKeyGenerator(req.ip ?? "");
+    return userId ?? req.ip ?? "unknown";
   },
   message: {
     message: "Too many Oracle requests this hour.",

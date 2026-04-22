@@ -147,9 +147,8 @@ export function PricingPage() {
       {/* tier cards */}
       {tab === "PARTY" ? (
         <section className="grid grid-cols-1 gap-5 md:grid-cols-2">
-          <PartyFreeCard />
-          {FEATURE_PLANS.filter((p) => p.key === "PARTY_PRO").map((fp) => (
-            <PartyProCard
+          {FEATURE_PLANS.map((fp) => (
+            <PartyTierCard
               key={fp.key}
               plan={fp}
               onChoose={() => setCheckoutTarget({ kind: "feature", plan: fp })}
@@ -187,42 +186,7 @@ export function PricingPage() {
   );
 }
 
-function PartyFreeCard() {
-  return (
-    <article className="relative flex flex-col gap-4 border-2 border-bone p-5 md:p-6">
-      <div>
-        <p className="font-mono text-xs uppercase tracking-brutal text-gold">
-          PARTY · FREE
-        </p>
-        <p className="mt-2 font-mono text-xs uppercase tracking-brutal text-muted">
-          1 FREE HOUR · LIFETIME
-        </p>
-      </div>
-      <div className="flex items-baseline gap-2">
-        <span className="brutal-heading text-5xl text-bone">$0</span>
-        <span className="font-mono text-xs uppercase tracking-brutal text-muted">
-          NO CARD
-        </span>
-      </div>
-      <ul className="flex flex-col gap-2 font-mono text-sm text-bone">
-        <li className="border-l-2 border-smoke pl-3">1 free hour to try</li>
-        <li className="border-l-2 border-smoke pl-3">No credit card needed</li>
-        <li className="border-l-2 border-smoke pl-3">Paradox account required</li>
-        <li className="border-l-2 border-smoke pl-3">
-          After 1 hour, subscribe to continue
-        </li>
-      </ul>
-      <Link
-        to="/party"
-        className="brutal-btn mt-auto text-center"
-      >
-        START A PARTY
-      </Link>
-    </article>
-  );
-}
-
-function PartyProCard({
+function PartyTierCard({
   plan,
   onChoose,
 }: {
@@ -230,17 +194,23 @@ function PartyProCard({
   onChoose: () => void;
 }) {
   return (
-    <article className="relative flex flex-col gap-4 border-2 border-gold p-5 md:p-6">
-      <span className="absolute right-4 top-[-14px] border-2 border-gold bg-gold px-2 py-1 font-mono text-[10px] uppercase tracking-brutal text-ink">
-        MOST POPULAR
-      </span>
+    <article
+      className={`relative flex flex-col gap-4 border-2 p-5 md:p-6 ${
+        plan.popular ? "border-gold" : "border-bone"
+      }`}
+    >
+      {plan.popular && (
+        <span className="absolute right-4 top-[-14px] border-2 border-gold bg-gold px-2 py-1 font-mono text-[10px] uppercase tracking-brutal text-ink">
+          MOST POPULAR
+        </span>
+      )}
       <div>
         <p className="font-mono text-xs uppercase tracking-brutal text-gold">
           PARTY · {plan.name.toUpperCase()}
         </p>
-        <p className="mt-2 font-mono text-xs uppercase tracking-brutal text-muted">
-          UNLIMITED SESSIONS
-        </p>
+        <span className="mt-2 inline-block border-2 border-gold px-2 py-1 font-mono text-[10px] uppercase tracking-brutal text-gold">
+          1 HOUR FREE TRIAL
+        </span>
       </div>
       <div className="flex items-baseline gap-2">
         <span className="brutal-heading text-5xl text-bone">
@@ -260,7 +230,7 @@ function PartyProCard({
       <button
         type="button"
         onClick={onChoose}
-        className="brutal-btn brutal-btn-gold mt-auto"
+        className={`brutal-btn ${plan.popular ? "brutal-btn-gold" : ""} mt-auto`}
       >
         GET STARTED
       </button>
@@ -434,7 +404,7 @@ function CheckoutModal({
           </>
         ) : (
           <p className="font-mono text-xs uppercase tracking-brutal text-muted">
-            Unlocks unlimited Colosseum sessions on your account. No Circle is
+            Unlocks unlimited Colosseum games on your account. No Circle is
             created — this is a personal subscription.
           </p>
         )}

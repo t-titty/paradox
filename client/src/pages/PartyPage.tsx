@@ -27,29 +27,33 @@ export function PartyPage() {
       </header>
 
       <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <article className="border-2 border-smoke p-4 md:p-5">
-          <p className="brutal-heading text-xs text-muted">FREE</p>
+        <article className="border-2 border-bone p-4 md:p-5">
+          <p className="brutal-heading text-xs text-gold">PARTY BASIC — $9.99/MO</p>
           <p className="mt-2 font-mono text-sm text-bone">
-            1 free hour to try. No credit card needed. Paradox account
-            required. After 1 hour, subscribe to continue.
+            1-hour free trial, no card. Then $9.99/month for unlimited party
+            games. Up to 8 players per game. Standard paradox pack.
           </p>
         </article>
         <article className="border-2 border-gold p-4 md:p-5">
-          <p className="brutal-heading text-xs text-gold">PARTY PRO — $9.99/MO</p>
+          <p className="brutal-heading text-xs text-gold">PARTY PRO — $29.99/MO</p>
           <p className="mt-2 font-mono text-sm text-bone">
-            Try free: 1 hour, no credit card. Then $9.99/month. Unlimited
-            sessions. Up to 25 players. Up to 2 hours per session. All
-            paradox packs. Session history saved to your profile.
+            1-hour free trial, no card. Then $29.99/month for unlimited party
+            games. Up to 25 players per game. All paradox packs. Full game
+            history saved to your profile.
           </p>
         </article>
       </section>
+
+      <p className="font-mono text-xs uppercase tracking-brutal text-muted">
+        One free trial per account — Basic and Pro share a single 1-hour trial.
+      </p>
 
       <div className="border-2 border-bone p-5 md:p-6">
         <p className="brutal-heading text-sm text-gold">COMING SOON.</p>
         <p className="mt-2 font-mono text-sm text-bone md:text-base">
           The Colosseum goes live soon. When it does,{" "}
           <span className="text-bone">{user?.username}</span> will be able to
-          start a session here, share a 6-char room code, and cast the live
+          start a game here, share a 6-char room code, and cast the live
           board to any TV.
         </p>
         <div className="mt-4 flex flex-wrap gap-3">

@@ -77,22 +77,24 @@ model User {
   // plus isAdmin. Drop in a future migration once we're sure nothing
   // references it.
   testMode       Boolean  @default(false)
-  // Party Mode — lifetime minute counters. Incremented by the
-  // session-host endpoint as sessions run; checked at session-start time
-  // to enforce the 60-minute free hour. `freePartyMinutesUsed` tracks the
-  // user's pre-subscription free hour; `partyProTrialMinutesUsed` tracks
-  // the Party Pro no-card trial hour. The active counter depends on the
-  // user's current state (see the session-start gate).
-  freePartyMinutesUsed     Int @default(0)
-  partyProTrialMinutesUsed Int @default(0)
+  // Party Mode — single lifetime trial-minutes counter, shared across
+  // Basic and Pro. Enforced server-side: if partyTrialMinutesUsed >= 60
+  // and the user has no active subscription, the session-host endpoint
+  // blocks with an upgrade prompt. A user can't trial Basic to 60, then
+  // trial Pro separately — the clock is per-account, not per-tier.
+  partyTrialMinutesUsed Int @default(0)
   // Party Pro entitlement. Populated by the Stripe webhook when a user
-  // subscribes; the session-start endpoint checks partyProStatus="active"
-  // (or "trialing") to unlock unlimited sessions, 25-player rooms, and
-  // 2-hour session length. No Circle is minted for Party Pro — this is a
-  // user-level subscription, not a tenant.
+  // subscribes to either Party Basic or Party Pro; the session-host
+  // endpoint checks partyProStatus="active" (or "trialing") to unlock
+  // unlimited hosting. `partyProStripePriceLookupKey` records which tier
+  // they're paying for (PARTY_BASIC_MONTHLY vs PARTY_PRO_MONTHLY) so
+  // per-tier limits (8 vs 25 players, paradox pack access) can be
+  // enforced at session-start. No Circle is minted for either tier —
+  // these are user-level subscriptions.
   partyProStatus               String    @default("none")
   partyProStripeCustomerId     String?
   partyProStripeSubscriptionId String?   @unique
+  partyProStripePriceLookupKey String?
   partyProCurrentPeriodEnd     DateTime?
   createdAt      DateTime @default(now())
 

@@ -284,7 +284,7 @@ export const PRICING_PLANS: PricingPlan[] = [
       "Everything in Starter",
       "Up to 15 members",
       "Den Stats dashboard",
-      "Full session history",
+      "Full game history",
     ],
   },
 ];
@@ -331,19 +331,31 @@ export interface FeaturePlan {
 
 export const FEATURE_PLANS: FeaturePlan[] = [
   {
-    key: "PARTY_PRO",
-    name: "Party Pro",
+    key: "PARTY_BASIC",
+    name: "Party Basic",
     tagline:
       "Try free for 1 hour — no card. Then $9.99/month for unlimited hosting.",
     monthlyUsd: 9.99,
+    features: [
+      "1 hour free trial — no credit card",
+      "Unlimited party games after subscribing",
+      "Up to 8 players per game",
+      "Standard paradox pack",
+    ],
+  },
+  {
+    key: "PARTY_PRO",
+    name: "Party Pro",
+    tagline:
+      "Try free for 1 hour — no card. Then $29.99/month for the full Colosseum.",
+    monthlyUsd: 29.99,
     popular: true,
     features: [
-      "Try free: 1 hour, no credit card",
-      "Unlimited sessions after subscribing",
-      "Up to 25 players per session",
-      "Up to 2 hours per session",
+      "1 hour free trial — no credit card",
+      "Unlimited party games after subscribing",
+      "Up to 25 players per game",
       "All paradox packs included",
-      "Full session history",
+      "Full game history",
     ],
   },
 ];

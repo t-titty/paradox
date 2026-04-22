@@ -146,22 +146,23 @@ export function CirclesPage() {
             In-person duel suggestions
           </li>
           <li className="border-l-2 border-gold pl-3">
-            Session history on your profile
+            Game history on your profile
           </li>
         </ul>
 
         <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
-          <article className="border-2 border-smoke p-4">
-            <p className="brutal-heading text-xs text-muted">FREE</p>
+          <article className="border-2 border-bone p-4">
+            <p className="brutal-heading text-xs text-gold">PARTY BASIC — $9.99/MO</p>
             <p className="mt-2 font-mono text-sm text-bone">
-              1 free hour lifetime · no credit card · Paradox account required
+              1-hour free trial, no card · then unlimited games · up to 8
+              players · standard paradox pack
             </p>
           </article>
           <article className="border-2 border-gold p-4">
-            <p className="brutal-heading text-xs text-gold">PARTY PRO — $9.99/mo</p>
+            <p className="brutal-heading text-xs text-gold">PARTY PRO — $29.99/MO</p>
             <p className="mt-2 font-mono text-sm text-bone">
-              1-hour trial, no card · then $9.99/mo · unlimited sessions · up
-              to 25 players · up to 2 hours each
+              1-hour free trial, no card · then unlimited games · up to 25
+              players · all paradox packs · full game history
             </p>
           </article>
         </div>

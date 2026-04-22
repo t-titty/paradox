@@ -302,13 +302,53 @@ export function plansByType(type: CircleTypeKey): PricingPlan[] {
   return PRICING_PLANS.filter((p) => p.circleType === type);
 }
 
-export const TAB_ORDER: { key: CircleTypeKey; label: string }[] = [
+/**
+ * Pricing-page tab key. Mostly matches CircleTypeKey, plus a "PARTY" entry
+ * for the user-level Party Pro subscription (no Circle). PricingPage
+ * renders a different card layout when tab === "PARTY".
+ */
+export type PricingTab = CircleTypeKey | "PARTY";
+
+export const TAB_ORDER: { key: PricingTab; label: string }[] = [
   { key: "DEN", label: "Personal" },
   { key: "JUNIOR_HIGH", label: "Jr. High" },
   { key: "HIGH_SCHOOL", label: "High School" },
   { key: "UNIVERSITY", label: "University" },
   { key: "CORPORATE", label: "Corporate" },
+  { key: "PARTY", label: "Party" },
 ];
+
+/* ---------- feature plans (user-level subscriptions) ---------- */
+
+export interface FeaturePlan {
+  key: string;
+  name: string;
+  tagline: string;
+  monthlyUsd: number;
+  features: string[];
+  popular?: boolean;
+}
+
+export const FEATURE_PLANS: FeaturePlan[] = [
+  {
+    key: "PARTY_PRO",
+    name: "Party Pro",
+    tagline: "Unlimited Colosseum sessions, bigger rooms, longer play.",
+    monthlyUsd: 9.99,
+    popular: true,
+    features: [
+      "Unlimited party sessions",
+      "Up to 25 players per session",
+      "Up to 2 hours per session",
+      "All paradox packs included",
+      "Full session history",
+    ],
+  },
+];
+
+export function featureLookupKey(planKey: string): string {
+  return `${planKey}_MONTHLY`;
+}
 
 export const BILLING_OPTIONS: { key: Billing; label: string; savings: number | null }[] = [
   { key: "monthly", label: "Monthly", savings: null },

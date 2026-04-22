@@ -4,22 +4,25 @@ import { api, errorMessage } from "../lib/api.ts";
 import { useAuth } from "../context/AuthContext.tsx";
 import {
   BILLING_OPTIONS,
+  FEATURE_PLANS,
   TAB_ORDER,
   amountFor,
   billingsFor,
+  featureLookupKey,
   formatDollars,
   lookupKeyFor,
   periodSuffix,
   plansByType,
   type Billing,
-  type CircleTypeKey,
+  type FeaturePlan,
   type PricingPlan,
+  type PricingTab,
 } from "../lib/pricing.ts";
 
-// Map the human-friendly `?tab=` URL param to a CircleTypeKey so we can
-// deep-link into the Personal tab from the /circles marketing page. Unknown
-// values fall through to the default tab (JUNIOR_HIGH).
-const QUERY_TAB_TO_KEY: Record<string, CircleTypeKey> = {
+// Map the human-friendly `?tab=` URL param to a PricingTab so we can
+// deep-link into a specific tab from marketing pages. Unknown values fall
+// through to the default tab (JUNIOR_HIGH).
+const QUERY_TAB_TO_KEY: Record<string, PricingTab> = {
   personal: "DEN",
   den: "DEN",
   "jr-high": "JUNIOR_HIGH",
@@ -27,32 +30,41 @@ const QUERY_TAB_TO_KEY: Record<string, CircleTypeKey> = {
   "high-school": "HIGH_SCHOOL",
   university: "UNIVERSITY",
   corporate: "CORPORATE",
+  party: "PARTY",
 };
+
+type CheckoutTarget =
+  | { kind: "circle"; plan: PricingPlan; billing: Billing }
+  | { kind: "feature"; plan: FeaturePlan };
 
 export function PricingPage() {
   const { user } = useAuth();
   const [params] = useSearchParams();
-  const initialTab = useMemo<CircleTypeKey>(() => {
+  const initialTab = useMemo<PricingTab>(() => {
     const raw = params.get("tab")?.toLowerCase();
     return raw && QUERY_TAB_TO_KEY[raw] ? QUERY_TAB_TO_KEY[raw] : "JUNIOR_HIGH";
   }, [params]);
-  const [tab, setTab] = useState<CircleTypeKey>(initialTab);
+  const [tab, setTab] = useState<PricingTab>(initialTab);
   const [billing, setBilling] = useState<Billing>("monthly");
-  const [checkoutPlan, setCheckoutPlan] = useState<PricingPlan | null>(null);
+  const [checkoutTarget, setCheckoutTarget] = useState<CheckoutTarget | null>(null);
 
-  const plans = useMemo(() => plansByType(tab), [tab]);
+  const plans = useMemo(
+    () => (tab === "PARTY" ? [] : plansByType(tab)),
+    [tab],
+  );
 
-  // Billing intervals this tab actually offers. All plans in a tab share
-  // offered billings today, so we read from the first plan; fall back to
-  // all three if the tab is somehow empty.
+  // Billing intervals this tab actually offers. PARTY is monthly-only.
+  // Circle tabs read from the first plan (all plans in a tab share offered
+  // billings today); fall back to all three if the tab is empty.
   const availableBillings = useMemo<readonly Billing[]>(() => {
+    if (tab === "PARTY") return ["monthly"] as const;
     return plans[0]
       ? billingsFor(plans[0])
       : (["monthly", "6month", "annual"] as const);
-  }, [plans]);
+  }, [plans, tab]);
 
   // If the user switches to a tab that doesn't offer the current billing
-  // interval (e.g. from Corporate 6-month → Personal), snap back to monthly
+  // interval (e.g. from Corporate 6-month → Party), snap back to monthly
   // instead of silently picking a bogus lookup key at checkout.
   useEffect(() => {
     if (!availableBillings.includes(billing)) {
@@ -104,57 +116,153 @@ export function PricingPage() {
         ))}
       </nav>
 
-      {/* billing toggle — filtered to the intervals this tab actually offers */}
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="font-mono text-xs uppercase tracking-brutal text-muted">
-          BILLING:
-        </span>
-        {BILLING_OPTIONS.filter((b) => availableBillings.includes(b.key)).map((b) => (
-          <button
-            key={b.key}
-            type="button"
-            onClick={() => setBilling(b.key)}
-            className={`flex items-center gap-2 border-2 px-3 py-2 font-mono text-xs uppercase tracking-brutal ${
-              billing === b.key
-                ? "border-gold text-gold"
-                : "border-smoke text-muted hover:border-bone hover:text-bone"
-            }`}
-          >
-            {b.label.toUpperCase()}
-            {b.savings && (
-              <span className="border-2 border-gold bg-gold px-1 text-[10px] text-ink">
-                SAVE {b.savings}%
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
+      {/* billing toggle — hidden on PARTY (monthly only) */}
+      {tab !== "PARTY" && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-mono text-xs uppercase tracking-brutal text-muted">
+            BILLING:
+          </span>
+          {BILLING_OPTIONS.filter((b) => availableBillings.includes(b.key)).map((b) => (
+            <button
+              key={b.key}
+              type="button"
+              onClick={() => setBilling(b.key)}
+              className={`flex items-center gap-2 border-2 px-3 py-2 font-mono text-xs uppercase tracking-brutal ${
+                billing === b.key
+                  ? "border-gold text-gold"
+                  : "border-smoke text-muted hover:border-bone hover:text-bone"
+              }`}
+            >
+              {b.label.toUpperCase()}
+              {b.savings && (
+                <span className="border-2 border-gold bg-gold px-1 text-[10px] text-ink">
+                  SAVE {b.savings}%
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* tier cards */}
-      <section className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-        {plans.map((plan) => (
-          <TierCard
-            key={plan.key}
-            plan={plan}
-            billing={billing}
-            onChoose={() => setCheckoutPlan(plan)}
-          />
-        ))}
-      </section>
+      {tab === "PARTY" ? (
+        <section className="grid grid-cols-1 gap-5 md:grid-cols-2">
+          <PartyFreeCard />
+          {FEATURE_PLANS.filter((p) => p.key === "PARTY_PRO").map((fp) => (
+            <PartyProCard
+              key={fp.key}
+              plan={fp}
+              onChoose={() => setCheckoutTarget({ kind: "feature", plan: fp })}
+            />
+          ))}
+        </section>
+      ) : (
+        <section className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+          {plans.map((plan) => (
+            <TierCard
+              key={plan.key}
+              plan={plan}
+              billing={billing}
+              onChoose={() =>
+                setCheckoutTarget({ kind: "circle", plan, billing })
+              }
+            />
+          ))}
+        </section>
+      )}
 
       <p className="font-mono text-xs uppercase tracking-brutal text-muted">
-        All plans billed in USD via Stripe. 6-month and annual plans are charged as a
-        single upfront payment; monthly plans renew automatically every month.
+        {tab === "PARTY"
+          ? "Party Pro billed monthly in USD via Stripe. Cancel anytime from the billing portal."
+          : "All plans billed in USD via Stripe. 6-month and annual plans are charged as a single upfront payment; monthly plans renew automatically every month."}
       </p>
 
-      {checkoutPlan && (
+      {checkoutTarget && (
         <CheckoutModal
-          plan={checkoutPlan}
-          billing={billing}
-          onClose={() => setCheckoutPlan(null)}
+          target={checkoutTarget}
+          onClose={() => setCheckoutTarget(null)}
         />
       )}
     </div>
+  );
+}
+
+function PartyFreeCard() {
+  return (
+    <article className="relative flex flex-col gap-4 border-2 border-bone p-5 md:p-6">
+      <div>
+        <p className="font-mono text-xs uppercase tracking-brutal text-gold">
+          PARTY · FREE
+        </p>
+        <p className="mt-2 font-mono text-xs uppercase tracking-brutal text-muted">
+          3 SESSIONS LIFETIME
+        </p>
+      </div>
+      <div className="flex items-baseline gap-2">
+        <span className="brutal-heading text-5xl text-bone">$0</span>
+        <span className="font-mono text-xs uppercase tracking-brutal text-muted">
+          ALWAYS
+        </span>
+      </div>
+      <ul className="flex flex-col gap-2 font-mono text-sm text-bone">
+        <li className="border-l-2 border-smoke pl-3">3 free sessions lifetime</li>
+        <li className="border-l-2 border-smoke pl-3">Up to 30 minutes per session</li>
+        <li className="border-l-2 border-smoke pl-3">Up to 8 players per session</li>
+        <li className="border-l-2 border-smoke pl-3">Standard paradox pack only</li>
+      </ul>
+      <Link
+        to="/party"
+        className="brutal-btn mt-auto text-center"
+      >
+        START A PARTY
+      </Link>
+    </article>
+  );
+}
+
+function PartyProCard({
+  plan,
+  onChoose,
+}: {
+  plan: FeaturePlan;
+  onChoose: () => void;
+}) {
+  return (
+    <article className="relative flex flex-col gap-4 border-2 border-gold p-5 md:p-6">
+      <span className="absolute right-4 top-[-14px] border-2 border-gold bg-gold px-2 py-1 font-mono text-[10px] uppercase tracking-brutal text-ink">
+        MOST POPULAR
+      </span>
+      <div>
+        <p className="font-mono text-xs uppercase tracking-brutal text-gold">
+          PARTY · {plan.name.toUpperCase()}
+        </p>
+        <p className="mt-2 font-mono text-xs uppercase tracking-brutal text-muted">
+          UNLIMITED SESSIONS
+        </p>
+      </div>
+      <div className="flex items-baseline gap-2">
+        <span className="brutal-heading text-5xl text-bone">
+          {formatDollars(plan.monthlyUsd)}
+        </span>
+        <span className="font-mono text-xs uppercase tracking-brutal text-muted">
+          /MO
+        </span>
+      </div>
+      <ul className="flex flex-col gap-2 font-mono text-sm text-bone">
+        {plan.features.map((f) => (
+          <li key={f} className="border-l-2 border-smoke pl-3">
+            {f}
+          </li>
+        ))}
+      </ul>
+      <button
+        type="button"
+        onClick={onChoose}
+        className="brutal-btn brutal-btn-gold mt-auto"
+      >
+        GET STARTED
+      </button>
+    </article>
   );
 }
 
@@ -215,18 +323,27 @@ function TierCard({
 }
 
 function CheckoutModal({
-  plan,
-  billing,
+  target,
   onClose,
 }: {
-  plan: PricingPlan;
-  billing: Billing;
+  target: CheckoutTarget;
   onClose: () => void;
 }) {
   const { user } = useAuth();
   const [orgName, setOrgName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  const isCircle = target.kind === "circle";
+  const headerLabel = isCircle
+    ? `${target.plan.tabLabel.toUpperCase()} · ${target.plan.tierName.toUpperCase()}`
+    : `PARTY · ${target.plan.name.toUpperCase()}`;
+  const priceLabel = isCircle
+    ? `${formatDollars(amountFor(target.plan, target.billing))} ${periodSuffix(target.billing)}`
+    : `${formatDollars(target.plan.monthlyUsd)} /MO`;
+  const priceLookupKey = isCircle
+    ? lookupKeyFor(target.plan.key, target.billing)
+    : featureLookupKey(target.plan.key);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -237,10 +354,16 @@ function CheckoutModal({
     setError(null);
     setBusy(true);
     try {
-      const { data } = await api.post<{ url: string }>("/stripe/checkout", {
-        priceLookupKey: lookupKeyFor(plan.key, billing),
-        organizationName: orgName.trim(),
-      });
+      // Feature plans skip organizationName entirely; the server accepts
+      // the missing field and the webhook will update the user's Party
+      // Pro fields instead of minting a Circle.
+      const body: Record<string, string> = { priceLookupKey };
+      if (isCircle) body.organizationName = orgName.trim();
+
+      const { data } = await api.post<{ url: string }>(
+        "/stripe/checkout",
+        body,
+      );
       // Redirect to Stripe-hosted Checkout. Nothing on this page should
       // run after this — the tab is gone.
       window.location.href = data.url;
@@ -265,11 +388,9 @@ function CheckoutModal({
             <p className="font-mono text-xs uppercase tracking-brutal text-gold">
               CHECKOUT
             </p>
-            <p className="brutal-heading mt-1 text-xl text-bone">
-              {plan.tabLabel.toUpperCase()} · {plan.tierName.toUpperCase()}
-            </p>
+            <p className="brutal-heading mt-1 text-xl text-bone">{headerLabel}</p>
             <p className="mt-1 font-mono text-xs uppercase tracking-brutal text-muted">
-              {formatDollars(amountFor(plan, billing))} {periodSuffix(billing)}
+              {priceLabel}
             </p>
           </div>
           <button
@@ -282,30 +403,39 @@ function CheckoutModal({
           </button>
         </div>
 
-        <label className="flex flex-col gap-1">
-          <span className="brutal-heading text-xs text-muted">
-            {plan.circleType === "DEN" ? "DEN NAME" : "ORGANIZATION NAME"}
-          </span>
-          <input
-            className="brutal-input"
-            value={orgName}
-            onChange={(e) => setOrgName(e.target.value)}
-            placeholder={
-              plan.circleType === "DEN"
-                ? "E.G. THE SMITHS"
-                : "E.G. LINCOLN HIGH SCHOOL"
-            }
-            required
-            minLength={2}
-            maxLength={80}
-            autoFocus
-          />
-        </label>
-        <p className="font-mono text-xs uppercase tracking-brutal text-muted">
-          {plan.circleType === "DEN"
-            ? "This becomes the name of your Den. You can rename it later."
-            : "This becomes the name of your Circle. You can rename games inside it later."}
-        </p>
+        {isCircle ? (
+          <>
+            <label className="flex flex-col gap-1">
+              <span className="brutal-heading text-xs text-muted">
+                {target.plan.circleType === "DEN" ? "DEN NAME" : "ORGANIZATION NAME"}
+              </span>
+              <input
+                className="brutal-input"
+                value={orgName}
+                onChange={(e) => setOrgName(e.target.value)}
+                placeholder={
+                  target.plan.circleType === "DEN"
+                    ? "E.G. THE SMITHS"
+                    : "E.G. LINCOLN HIGH SCHOOL"
+                }
+                required
+                minLength={2}
+                maxLength={80}
+                autoFocus
+              />
+            </label>
+            <p className="font-mono text-xs uppercase tracking-brutal text-muted">
+              {target.plan.circleType === "DEN"
+                ? "This becomes the name of your Den. You can rename it later."
+                : "This becomes the name of your Circle. You can rename games inside it later."}
+            </p>
+          </>
+        ) : (
+          <p className="font-mono text-xs uppercase tracking-brutal text-muted">
+            Unlocks unlimited Colosseum sessions on your account. No Circle is
+            created — this is a personal subscription.
+          </p>
+        )}
 
         {!user && (
           <p className="border-2 border-blood p-3 font-mono text-sm text-blood">

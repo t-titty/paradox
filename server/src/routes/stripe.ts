@@ -5,7 +5,7 @@ import { HttpError } from "../middleware/error.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { getStripe } from "../lib/stripe.js";
 import { env } from "../env.js";
-import { resolveLookupKey } from "../lib/pricing.js";
+import { resolveLookupKey, resolveFeatureLookupKey } from "../lib/pricing.js";
 
 export const stripeRouter = Router();
 
@@ -25,16 +25,24 @@ function mustStripe() {
 
 /* ---------- POST /api/stripe/checkout ---------- */
 
+// organizationName is required for circle-tier plans (becomes Circle.name)
+// but meaningless for user-level feature plans like Party Pro. We validate
+// per-plan inside the handler rather than with a discriminated-union zod
+// schema to keep the API surface identical.
 const checkoutSchema = z.object({
   priceLookupKey: z.string().min(1).max(64),
-  organizationName: z.string().trim().min(2).max(80),
+  organizationName: z.string().trim().min(2).max(80).optional(),
 });
 
 /**
  * Creates a subscription Checkout Session. Client sends the stable
- * `lookup_key` from the pricing catalogue (not a raw priceId) and the
- * org name; the server resolves to a live Stripe Price and stashes
- * everything the webhook needs in `session.metadata`.
+ * `lookup_key` from the pricing catalogue (not a raw priceId); the server
+ * resolves to a live Stripe Price and stashes everything the webhook needs
+ * in `session.metadata`.
+ *
+ * For circle-tier plans the client must also send `organizationName` — it
+ * becomes the Circle's name on webhook completion. Feature plans (e.g.
+ * Party Pro) don't mint a Circle, so org name is not required.
  *
  * Returns { url } — the client does `window.location = url`.
  */
@@ -44,9 +52,20 @@ stripeRouter.post("/checkout", requireAuth, async (req, res, next) => {
     const { userId } = req as AuthedRequest;
     const body = checkoutSchema.parse(req.body);
 
-    const resolved = resolveLookupKey(body.priceLookupKey);
-    if (!resolved) {
+    const circlePlan = resolveLookupKey(body.priceLookupKey);
+    const featurePlan = circlePlan
+      ? null
+      : resolveFeatureLookupKey(body.priceLookupKey);
+    if (!circlePlan && !featurePlan) {
       throw new HttpError(400, "Unknown price key", "unknown_price");
+    }
+
+    if (circlePlan && !body.organizationName) {
+      throw new HttpError(
+        400,
+        "organizationName is required for circle-tier checkout.",
+        "missing_org_name",
+      );
     }
 
     // Find the active Price with this lookup_key. We trust Stripe's index
@@ -72,6 +91,15 @@ stripeRouter.post("/checkout", requireAuth, async (req, res, next) => {
     });
     if (!user) throw new HttpError(404, "User not found", "not_found");
 
+    // Metadata shape stays identical across both plan kinds so the webhook
+    // can read the same keys; organizationName is simply absent for
+    // feature plans.
+    const metadata: Record<string, string> = {
+      userId,
+      priceLookupKey: body.priceLookupKey,
+    };
+    if (body.organizationName) metadata.organizationName = body.organizationName;
+
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
       line_items: [{ price: price.id, quantity: 1 }],
@@ -79,20 +107,8 @@ stripeRouter.post("/checkout", requireAuth, async (req, res, next) => {
       cancel_url: `${env.PUBLIC_APP_URL}/pricing/cancel`,
       customer_email: user.email,
       client_reference_id: userId,
-      // Everything the webhook needs to build the Circle. Copied onto the
-      // Subscription too so subscription-centric webhooks have it.
-      metadata: {
-        userId,
-        organizationName: body.organizationName,
-        priceLookupKey: body.priceLookupKey,
-      },
-      subscription_data: {
-        metadata: {
-          userId,
-          organizationName: body.organizationName,
-          priceLookupKey: body.priceLookupKey,
-        },
-      },
+      metadata,
+      subscription_data: { metadata },
     });
 
     if (!session.url) {

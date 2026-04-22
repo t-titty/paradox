@@ -3,7 +3,7 @@ import type Stripe from "stripe";
 import { prisma } from "../db.js";
 import { env } from "../env.js";
 import { getStripe } from "../lib/stripe.js";
-import { resolveLookupKey } from "../lib/pricing.js";
+import { resolveLookupKey, resolveFeatureLookupKey } from "../lib/pricing.js";
 
 /**
  * Stripe webhook router. MUST be mounted before `express.json()` so the raw
@@ -122,18 +122,9 @@ async function onCheckoutCompleted(session: Stripe.Checkout.Session) {
     return;
   }
 
-  // Idempotency: if we've already minted a Circle for this subscription
-  // (retry, duplicate delivery), skip the create step.
-  const existing = await prisma.circle.findUnique({
-    where: { stripeSubscriptionId: subscriptionId },
-    select: { id: true },
-  });
-  if (existing) return;
-
   const userId = session.metadata?.userId;
-  const organizationName = session.metadata?.organizationName;
   const priceLookupKey = session.metadata?.priceLookupKey;
-  if (!userId || !organizationName || !priceLookupKey) {
+  if (!userId || !priceLookupKey) {
     console.error("[stripe:webhook] session.completed missing metadata", session.id);
     return;
   }
@@ -144,14 +135,64 @@ async function onCheckoutCompleted(session: Stripe.Checkout.Session) {
     return;
   }
 
+  const stripe = getStripe()!;
+
+  // Branch 1: feature plan (user-level sub, no Circle). Currently just
+  // Party Pro. Checked first because feature keys won't resolve as circle
+  // keys.
+  const feature = resolveFeatureLookupKey(priceLookupKey);
+  if (feature) {
+    // Idempotency: if we've already marked this subscription on the user,
+    // skip. The unique constraint on partyProStripeSubscriptionId would
+    // throw on a duplicate write anyway.
+    const already = await prisma.user.findFirst({
+      where: { partyProStripeSubscriptionId: subscriptionId },
+      select: { id: true },
+    });
+    if (already) return;
+
+    const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+    const periodEnd = subCurrentPeriodEnd(subscription);
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        partyProStatus: subscription.status,
+        partyProStripeCustomerId: customerId,
+        partyProStripeSubscriptionId: subscriptionId,
+        partyProCurrentPeriodEnd: periodEnd ? new Date(periodEnd * 1000) : null,
+      },
+    });
+    console.log(
+      `[stripe:webhook] party pro activated for ${userId} · ${feature.key}`,
+    );
+    return;
+  }
+
+  // Branch 2: circle tier plan. Requires organizationName in metadata;
+  // mints a Circle + OWNER membership.
   const resolved = resolveLookupKey(priceLookupKey);
   if (!resolved) {
     console.error("[stripe:webhook] unknown priceLookupKey", priceLookupKey);
     return;
   }
 
-  // Pull the subscription to learn its current_period_end and status.
-  const stripe = getStripe()!;
+  const organizationName = session.metadata?.organizationName;
+  if (!organizationName) {
+    console.error(
+      "[stripe:webhook] circle checkout missing organizationName",
+      session.id,
+    );
+    return;
+  }
+
+  // Idempotency: if we've already minted a Circle for this subscription
+  // (retry, duplicate delivery), skip the create step.
+  const existing = await prisma.circle.findUnique({
+    where: { stripeSubscriptionId: subscriptionId },
+    select: { id: true },
+  });
+  if (existing) return;
+
   const subscription = await stripe.subscriptions.retrieve(subscriptionId);
   const periodEnd = subCurrentPeriodEnd(subscription);
 
@@ -178,6 +219,28 @@ async function onCheckoutCompleted(session: Stripe.Checkout.Session) {
 }
 
 async function onSubscriptionUpdated(sub: Stripe.Subscription) {
+  const periodEnd = subCurrentPeriodEnd(sub);
+  const periodEndDate = periodEnd ? new Date(periodEnd * 1000) : null;
+
+  // Party Pro branch: if this subscription is tied to a User row, update
+  // the user's status/period — the column is unique so this is a 0-or-1
+  // row match.
+  const partyUser = await prisma.user.findFirst({
+    where: { partyProStripeSubscriptionId: sub.id },
+    select: { id: true },
+  });
+  if (partyUser) {
+    await prisma.user.update({
+      where: { id: partyUser.id },
+      data: {
+        partyProStatus: sub.status,
+        partyProCurrentPeriodEnd: periodEndDate,
+      },
+    });
+    return;
+  }
+
+  // Circle branch (existing behavior).
   const circle = await prisma.circle.findUnique({
     where: { stripeSubscriptionId: sub.id },
     select: { id: true },
@@ -190,12 +253,11 @@ async function onSubscriptionUpdated(sub: Stripe.Subscription) {
   const lookupKey = item?.price?.lookup_key ?? null;
   const resolved = lookupKey ? resolveLookupKey(lookupKey) : null;
 
-  const periodEnd = subCurrentPeriodEnd(sub);
   await prisma.circle.update({
     where: { stripeSubscriptionId: sub.id },
     data: {
       subscriptionStatus: sub.status,
-      currentPeriodEnd: periodEnd ? new Date(periodEnd * 1000) : null,
+      currentPeriodEnd: periodEndDate,
       ...(resolved
         ? {
             stripePriceLookupKey: lookupKey,
@@ -211,6 +273,19 @@ async function onSubscriptionUpdated(sub: Stripe.Subscription) {
 }
 
 async function onSubscriptionDeleted(sub: Stripe.Subscription) {
+  // Try Party Pro branch first.
+  const partyUser = await prisma.user.findFirst({
+    where: { partyProStripeSubscriptionId: sub.id },
+    select: { id: true },
+  });
+  if (partyUser) {
+    await prisma.user.update({
+      where: { id: partyUser.id },
+      data: { partyProStatus: "canceled" },
+    });
+    return;
+  }
+
   await prisma.circle
     .update({
       where: { stripeSubscriptionId: sub.id },
@@ -224,6 +299,19 @@ async function onSubscriptionDeleted(sub: Stripe.Subscription) {
 async function onInvoicePaymentFailed(invoice: Stripe.Invoice) {
   const subId = invoiceSubscriptionId(invoice);
   if (!subId) return;
+
+  const partyUser = await prisma.user.findFirst({
+    where: { partyProStripeSubscriptionId: subId },
+    select: { id: true },
+  });
+  if (partyUser) {
+    await prisma.user.update({
+      where: { id: partyUser.id },
+      data: { partyProStatus: "past_due" },
+    });
+    return;
+  }
+
   await prisma.circle
     .update({
       where: { stripeSubscriptionId: subId },

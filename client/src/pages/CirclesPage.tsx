@@ -154,13 +154,13 @@ export function CirclesPage() {
           <article className="border-2 border-smoke p-4">
             <p className="brutal-heading text-xs text-muted">FREE</p>
             <p className="mt-2 font-mono text-sm text-bone">
-              1 session per day · up to 8 players
+              3 sessions lifetime · 30 min each · up to 8 players
             </p>
           </article>
           <article className="border-2 border-gold p-4">
-            <p className="brutal-heading text-xs text-gold">PARTY PRO</p>
+            <p className="brutal-heading text-xs text-gold">PARTY PRO — $9.99/mo</p>
             <p className="mt-2 font-mono text-sm text-bone">
-              Unlimited sessions · up to 30 players
+              Unlimited sessions · up to 2 hours each · up to 25 players
             </p>
           </article>
         </div>

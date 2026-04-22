@@ -16,10 +16,12 @@
  */
 import {
   PRICING_PLANS,
+  FEATURE_PLANS,
   billingsFor,
   lookupKeyFor,
   amountFor,
   recurringFor,
+  featureLookupKey,
 } from "../lib/pricing.js";
 import { requireStripe } from "../lib/stripe.js";
 
@@ -136,6 +138,63 @@ async function main() {
       );
     } else {
       console.log(`[stripe:sync] created ${lookupKey} → ${created.id} (${amountCents}¢)`);
+    }
+  }
+
+  // --- Feature plans (user-level subscriptions, no Circle) --------------
+  // Same upsert/rotate pattern as above, but a flat loop — one product +
+  // one monthly price per plan.
+  for (const fp of FEATURE_PLANS) {
+    let productId = existingProducts.get(fp.key);
+    const productPayload = {
+      name: `PARADOX — ${fp.name}`,
+      description: fp.tagline,
+      metadata: {
+        plan_key: fp.key,
+        kind: "feature" as const,
+      },
+    };
+    if (!productId) {
+      const created = await stripe.products.create(productPayload);
+      productId = created.id;
+      console.log(`[stripe:sync] created product ${fp.key} → ${productId}`);
+    } else {
+      await stripe.products.update(productId, productPayload);
+    }
+
+    const lookupKey = featureLookupKey(fp.key);
+    const amountCents = usdToCents(fp.monthlyUsd);
+    // Batch-fetch missed this one; issue a targeted lookup.
+    const existingList = await stripe.prices.list({
+      lookup_keys: [lookupKey],
+      active: true,
+      limit: 1,
+    });
+    const existingPrice = existingList.data[0];
+    if (existingPrice && existingPrice.unit_amount === amountCents) continue;
+
+    const created = await stripe.prices.create({
+      currency: "usd",
+      unit_amount: amountCents,
+      product: productId,
+      recurring: { interval: "month", interval_count: 1 },
+      lookup_key: lookupKey,
+      transfer_lookup_key: Boolean(existingPrice),
+      metadata: {
+        plan_key: fp.key,
+        billing: "monthly",
+        kind: "feature",
+      },
+    });
+    if (existingPrice) {
+      await stripe.prices.update(existingPrice.id, { active: false });
+      console.log(
+        `[stripe:sync] rotated ${lookupKey}: ${existingPrice.id} → ${created.id} (${amountCents}¢)`,
+      );
+    } else {
+      console.log(
+        `[stripe:sync] created ${lookupKey} → ${created.id} (${amountCents}¢)`,
+      );
     }
   }
 

@@ -30,13 +30,15 @@ export function PartyPage() {
         <article className="border-2 border-smoke p-4 md:p-5">
           <p className="brutal-heading text-xs text-muted">FREE</p>
           <p className="mt-2 font-mono text-sm text-bone">
-            1 session per day · up to 8 players · standard paradox pack
+            3 free sessions lifetime. 30 minutes each. Up to 8 players.
+            Standard paradox pack only.
           </p>
         </article>
         <article className="border-2 border-gold p-4 md:p-5">
-          <p className="brutal-heading text-xs text-gold">PARTY PRO</p>
+          <p className="brutal-heading text-xs text-gold">PARTY PRO — $9.99/MO</p>
           <p className="mt-2 font-mono text-sm text-bone">
-            Unlimited sessions · up to 30 players · all paradox packs · session history
+            Unlimited sessions. Up to 2 hours each. Up to 25 players. All
+            paradox packs. Session history saved to your profile.
           </p>
         </article>
       </section>

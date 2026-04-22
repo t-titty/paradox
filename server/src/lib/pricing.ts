@@ -353,3 +353,56 @@ export function resolveLookupKey(
 export const ALL_LOOKUP_KEYS: string[] = PRICING_PLANS.flatMap((p) =>
   billingsFor(p).map((b) => lookupKeyFor(p.key, b)),
 );
+
+/* ---------- feature plans (user-level subscriptions, no Circle) ---------- */
+
+/**
+ * User-level recurring subscriptions that don't create a Circle. Kept in
+ * a separate catalogue so the Circle-oriented PricingPlan shape stays
+ * focused (no `circleType`, no `seatLimit`, no 6-month option). Currently
+ * just Party Pro monthly; extensible to any future "unlock a feature for
+ * this user" subscription.
+ */
+export interface FeaturePlan {
+  key: string;
+  /** Short tab/card label, e.g. "Party Pro" */
+  name: string;
+  /** Descriptive tagline shown under the price */
+  tagline: string;
+  monthlyUsd: number;
+  features: string[];
+  popular?: boolean;
+}
+
+export const FEATURE_PLANS: FeaturePlan[] = [
+  {
+    key: "PARTY_PRO",
+    name: "Party Pro",
+    tagline: "Unlimited Colosseum sessions, bigger rooms, longer play.",
+    monthlyUsd: 9.99,
+    popular: true,
+    features: [
+      "Unlimited party sessions",
+      "Up to 25 players per session",
+      "Up to 2 hours per session",
+      "All paradox packs included",
+      "Full session history",
+    ],
+  },
+];
+
+/** Builds the Stripe `lookup_key` for a feature plan. Always _MONTHLY. */
+export function featureLookupKey(planKey: string): string {
+  return `${planKey}_MONTHLY`;
+}
+
+/**
+ * Reverse lookup for a feature-plan lookup key. The webhook calls both
+ * `resolveLookupKey` (circles) and this (features) to figure out what a
+ * successful checkout was for.
+ */
+export function resolveFeatureLookupKey(
+  lookupKey: string,
+): FeaturePlan | undefined {
+  return FEATURE_PLANS.find((p) => featureLookupKey(p.key) === lookupKey);
+}

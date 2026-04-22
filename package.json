@@ -14,7 +14,7 @@
     "build": "npm run build:server && npm run build:client && npm run build:verify",
     "build:server": "npm --workspace server run build",
     "build:client": "npm --workspace client run build",
-    "build:verify": "node -e \"const fs=require('fs'),p=require('path');const idx=p.resolve('client/dist/index.html');if(!fs.existsSync(idx)){console.error('[build:verify] MISSING '+idx);process.exit(1);}const assets=p.resolve('client/dist/assets');const n=fs.existsSync(assets)?fs.readdirSync(assets).length:0;if(n===0){console.error('[build:verify] client/dist/assets is empty');process.exit(1);}console.log('[build:verify] ok — client/dist/index.html present, '+n+' files in assets/');\"",
+    "build:verify": "node -e \"const fs=require('fs'),p=require('path');const dist=p.resolve('client/dist');const idx=p.join(dist,'index.html');if(!fs.existsSync(idx)){console.error('[build:verify] MISSING '+idx);process.exit(1);}const assets=p.join(dist,'assets');const files=fs.existsSync(assets)?fs.readdirSync(assets):[];if(files.length===0){console.error('[build:verify] client/dist/assets is empty — vite build did not emit bundles');process.exit(1);}const hasCss=files.some(f=>f.endsWith('.css'));const hasJs=files.some(f=>f.endsWith('.js'));if(!hasCss||!hasJs){console.error('[build:verify] missing '+(!hasCss?'CSS ':'')+(!hasJs?'JS ':'')+'bundle in assets/');process.exit(1);}console.log('[build:verify] ok — '+files.length+' files in client/dist/assets:');for(const f of files){const s=fs.statSync(p.join(assets,f));console.log('  '+f+' ('+s.size+' bytes)');}\"",
     "start": "npm --workspace server run start:prod",
     "db:up": "docker compose up -d postgres",
     "db:down": "docker compose down",

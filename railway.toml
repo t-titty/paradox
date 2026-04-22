@@ -1,10 +1,18 @@
 [build]
 builder = "NIXPACKS"
-buildCommand = "npm run build"
+# Wipe any stale build artifacts so Vite always emits fresh hashed bundles
+# into client/dist/assets/ — bust the tsc incremental cache too, since a
+# stale tsconfig.tsbuildinfo can make `tsc -b` report success without emit.
+buildCommand = "rm -rf client/dist server/dist client/tsconfig.tsbuildinfo server/tsconfig.tsbuildinfo && npm run build"
 
 [deploy]
 startCommand = "npm run start"
 healthcheckPath = "/api/health"
-healthcheckTimeout = 30
+# Startup runs `prisma migrate deploy && prisma db seed && node dist/index.js`.
+# The seed does 365 sequential upserts against remote Postgres — at 30s we
+# were being SIGTERM'd before the HTTP server even bound its port, so new
+# deploys never replaced the old (broken) container. Raise to 300s so the
+# seed has headroom; the listen() itself happens within milliseconds after.
+healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 5

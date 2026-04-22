@@ -13,3 +13,4 @@ coverage/
 client/dist/
 server/dist/
 server/prisma/*.db
+*.tsbuildinfo

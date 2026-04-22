@@ -16,7 +16,10 @@
       "PowerShell(Get-ChildItem -Path C:\\\\Users\\\\travi\\\\paradox\\\\server\\\\src -File | ForEach-Object { $_.Name })",
       "Bash(grep -E \"src[\\\\\\\\/]index\\\\.ts\")",
       "Bash(npm --workspace server run typecheck)",
-      "PowerShell(npm *)"
+      "PowerShell(npm *)",
+      "PowerShell(Get-Content *)",
+      "Bash(git *)",
+      "PowerShell(git rm *)"
     ]
   }
 }

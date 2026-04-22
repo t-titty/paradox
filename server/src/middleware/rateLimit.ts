@@ -1,4 +1,4 @@
-import rateLimit from "express-rate-limit";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 
 /**
  * Rate-limit middlewares. All use the default in-memory store — single
@@ -34,7 +34,11 @@ export const oracleLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req) => {
     const userId = (req as unknown as { userId?: string }).userId;
-    return userId ?? req.ip ?? "unknown";
+    if (userId) return userId;
+    // Route IPv6 requests through ipKeyGenerator so different addresses in
+    // the same /56 subnet share a bucket — otherwise a single client could
+    // trivially bypass the limit by cycling its IPv6 suffix.
+    return ipKeyGenerator(req.ip ?? "unknown");
   },
   message: {
     message: "Too many Oracle requests this hour.",

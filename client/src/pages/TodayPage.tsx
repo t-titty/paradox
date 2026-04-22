@@ -2,10 +2,29 @@ import { useEffect, useState } from "react";
 import { api, errorMessage } from "../lib/api.ts";
 import type { Phase, TodayResponse } from "../lib/types.ts";
 import { PhaseBanner } from "../components/PhaseBanner.tsx";
+import { CountdownTimer } from "../components/CountdownTimer.tsx";
 import { DropVow } from "./views/DropVow.tsx";
 import { SortView } from "./views/SortView.tsx";
 import { DuelFlow } from "./views/duel/DuelFlow.tsx";
 import { Throwback } from "./views/Throwback.tsx";
+
+/**
+ * Label shown above the countdown digits for each phase. Drop and Bridge
+ * both count to the next 8 AM drop, so they share the same label.
+ */
+function countdownLabelFor(phase: Phase): string {
+  switch (phase) {
+    case "bridge":
+      return "NEXT DROP IN";
+    case "drop":
+    case "vow":
+      return "VOW CLOSES IN";
+    case "sort":
+      return "DUEL BEGINS IN";
+    case "duel":
+      return "DUEL ENDS IN";
+  }
+}
 
 /**
  * The single daily entry point. Resolves the current phase server-side,
@@ -75,12 +94,44 @@ export function TodayPage() {
           testMode={testMode}
           onPhaseOverride={onPhaseOverride}
         />
+        <CountdownTimer
+          targetAt={state.phase.nextTransitionAt}
+          variant="small"
+          label={countdownLabelFor(state.phase.phase)}
+        />
         <Throwback state={state} onDone={() => load()} />
       </div>
     );
   }
 
   const { phase, paradox, hasVoted } = state;
+  const countdownLabel = countdownLabelFor(phase.phase);
+
+  // Bridge = "waiting for next Drop". Takes over the page with a dramatic
+  // fullscreen timer; PhaseBanner stays so test-mode admins can switch
+  // phases and still see the test-mode ribbon.
+  if (phase.phase === "bridge") {
+    return (
+      <div className="flex flex-1 flex-col">
+        <PhaseBanner
+          phase={phase.phase}
+          nextTransitionAt={phase.nextTransitionAt}
+          testMode={testMode}
+          onPhaseOverride={onPhaseOverride}
+        />
+        <CountdownTimer
+          targetAt={phase.nextTransitionAt}
+          variant="fullscreen"
+          label={countdownLabel}
+          showMillis
+        />
+      </div>
+    );
+  }
+
+  // Active phase (drop / vow / sort / duel). Small or medium timer sits
+  // directly below the phase banner, on top of the phase-specific view.
+  const timerVariant = phase.phase === "duel" ? "medium" : "small";
 
   return (
     <div className="flex flex-col">
@@ -89,6 +140,11 @@ export function TodayPage() {
         nextTransitionAt={phase.nextTransitionAt}
         testMode={testMode}
         onPhaseOverride={onPhaseOverride}
+      />
+      <CountdownTimer
+        targetAt={phase.nextTransitionAt}
+        variant={timerVariant}
+        label={countdownLabel}
       />
       {phase.phase === "vow" && (
         <DropVow
@@ -107,13 +163,6 @@ export function TodayPage() {
           roman="I"
           title="THE DROP"
           body="The paradox has been revealed. Switch to THE VOW to take a side."
-        />
-      )}
-      {phase.phase === "bridge" && (
-        <Placeholder
-          roman="V"
-          title="THE BRIDGE"
-          body="Between duels, the world sleeps. The next Drop arrives at 8:00 AM."
         />
       )}
     </div>

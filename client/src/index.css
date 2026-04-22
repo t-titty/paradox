@@ -83,3 +83,14 @@
     min-height: 44px;
   }
 }
+
+/* Countdown-timer sub-5-minute warning flash: on for 1s, off for 0.5s,
+   sharp step (not a smooth fade), repeats forever. Scoped to the timer
+   element so `animate-pulse` on sibling elements keeps its own rhythm. */
+@keyframes paradox-timer-flash {
+  0%, 66.66% { opacity: 1; }
+  66.67%, 100% { opacity: 0; }
+}
+.paradox-timer-flash {
+  animation: paradox-timer-flash 1.5s infinite;
+}

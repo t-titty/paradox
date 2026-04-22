@@ -63,6 +63,118 @@ export function CirclesPage() {
         />
       </section>
 
+      {/* Dens — warmer, friends-and-family framing. Gold-heavy to contrast
+          with the bone-bordered institutional grid above. */}
+      <section className="border-2 border-gold p-5 md:p-6">
+        <p className="brutal-heading text-xs text-gold">PERSONAL</p>
+        <h2 className="brutal-heading mt-3 text-3xl text-bone md:text-5xl">
+          PRIVATE DENS
+        </h2>
+        <p className="mt-3 max-w-2xl font-mono text-sm text-bone md:text-base">
+          Your crew. Your paradoxes. Your archive. A closed circle for friends,
+          family, or anyone you actually want to debate.
+        </p>
+
+        <ul className="mt-5 grid grid-cols-1 gap-2 font-mono text-sm text-bone md:grid-cols-2">
+          <li className="border-l-2 border-gold pl-3">
+            Private matchmaking within your Den
+          </li>
+          <li className="border-l-2 border-gold pl-3">
+            Shared synthesis archive
+          </li>
+          <li className="border-l-2 border-gold pl-3">
+            Group tribe leaderboard
+          </li>
+          <li className="border-l-2 border-gold pl-3">
+            Invite via shareable link
+          </li>
+          <li className="border-l-2 border-gold pl-3">
+            Den Stats — how your group thinks
+          </li>
+        </ul>
+
+        <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
+          <DenTier
+            title="DEN STARTER"
+            seats="UP TO 5 MEMBERS"
+            blurb="The smallest circle. Four friends plus you."
+          />
+          <DenTier
+            title="DEN PLUS"
+            seats="UP TO 15 MEMBERS"
+            blurb="Extended family, a book club, a whole group chat."
+            featured
+          />
+        </div>
+
+        <div className="mt-6">
+          <Link
+            to="/pricing?tab=personal"
+            className="brutal-btn brutal-btn-gold inline-block"
+          >
+            VIEW PRICING
+          </Link>
+        </div>
+      </section>
+
+      {/* Colosseum — live party mode. Bold, separate section to read as a
+          distinct product, not another Circle tier. */}
+      <section className="border-2 border-bone p-5 md:p-6">
+        <p className="brutal-heading text-xs text-gold">PARTY MODE</p>
+        <h2 className="brutal-heading mt-3 text-4xl text-bone md:text-6xl">
+          THE COLOSSEUM.
+        </h2>
+        <p className="mt-4 max-w-2xl font-mono text-sm text-bone md:text-base">
+          Cast the dilemma to your TV. Vote on your phones. Debate in person.
+          A live party game powered by PARADOX.
+        </p>
+
+        <ul className="mt-5 grid grid-cols-1 gap-2 font-mono text-sm text-bone md:grid-cols-2">
+          <li className="border-l-2 border-gold pl-3">
+            Kahoot-style live voting
+          </li>
+          <li className="border-l-2 border-gold pl-3">
+            Cast mode for TV / big screen
+          </li>
+          <li className="border-l-2 border-gold pl-3">
+            Real-time vote reveal
+          </li>
+          <li className="border-l-2 border-gold pl-3">
+            AI tribe assignments, live
+          </li>
+          <li className="border-l-2 border-gold pl-3">
+            In-person duel suggestions
+          </li>
+          <li className="border-l-2 border-gold pl-3">
+            Session history on your profile
+          </li>
+        </ul>
+
+        <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
+          <article className="border-2 border-smoke p-4">
+            <p className="brutal-heading text-xs text-muted">FREE</p>
+            <p className="mt-2 font-mono text-sm text-bone">
+              1 session per day · up to 8 players
+            </p>
+          </article>
+          <article className="border-2 border-gold p-4">
+            <p className="brutal-heading text-xs text-gold">PARTY PRO</p>
+            <p className="mt-2 font-mono text-sm text-bone">
+              Unlimited sessions · up to 30 players
+            </p>
+          </article>
+        </div>
+
+        <div className="mt-6 flex flex-wrap gap-3">
+          <Link to="/party" className="brutal-btn brutal-btn-gold">
+            START A PARTY
+          </Link>
+          <Link to="/pricing" className="brutal-btn">
+            VIEW PRICING
+          </Link>
+        </div>
+      </section>
+
       <section className="border-2 border-bone p-5 md:p-6">
         <p className="brutal-heading text-sm text-gold">WHAT YOU GET</p>
         <ul className="mt-4 grid grid-cols-1 gap-3 font-mono text-sm text-bone md:grid-cols-2 md:text-base">
@@ -118,6 +230,36 @@ function Tier({
           </li>
         ))}
       </ul>
+    </article>
+  );
+}
+
+function DenTier({
+  title,
+  seats,
+  blurb,
+  featured,
+}: {
+  title: string;
+  seats: string;
+  blurb: string;
+  featured?: boolean;
+}) {
+  return (
+    <article
+      className={`border-2 p-4 md:p-5 ${
+        featured ? "border-gold" : "border-smoke"
+      }`}
+    >
+      <p
+        className={`brutal-heading text-xs ${featured ? "text-gold" : "text-muted"}`}
+      >
+        {title}
+      </p>
+      <p className="mt-2 font-mono text-xs uppercase tracking-brutal text-gold">
+        {seats}
+      </p>
+      <p className="mt-2 font-mono text-sm text-bone">{blurb}</p>
     </article>
   );
 }

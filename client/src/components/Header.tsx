@@ -18,10 +18,11 @@ export function Header() {
         <div className="flex items-center gap-3">
           <Link
             to="/"
-            className="brutal-heading text-2xl text-bone hover:text-gold"
+            aria-label="PARADOX — home"
+            className="flex items-center hover:opacity-80"
             onClick={closeMenu}
           >
-            PARADOX
+            <img src="/logo.png" alt="PARADOX" className="h-7 w-auto" />
           </Link>
           {testMode && (
             <span className="border border-gold px-2 py-[2px] font-mono text-[10px] uppercase tracking-brutal text-gold">

@@ -42,6 +42,8 @@ model User {
   isPremium      Boolean  @default(false)
   isAdmin        Boolean  @default(false)
   isBanned       Boolean  @default(false)
+  twoFactorSecret   String?
+  twoFactorEnabled  Boolean  @default(false)
   createdAt      DateTime @default(now())
 
   votes            Vote[]

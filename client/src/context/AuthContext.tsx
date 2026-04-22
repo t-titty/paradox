@@ -4,12 +4,21 @@ import { disconnectSocket, getSocket } from "../lib/socket.ts";
 import type { User } from "../lib/types.ts";
 import type { UserStatsDTO } from "../lib/duelTypes.ts";
 
+export type LoginResult = { ok: true } | { twoFactorRequired: true };
+
 interface AuthContextValue {
   user: User | null;
   loading: boolean;
-  login(identifier: string, password: string): Promise<void>;
+  login(
+    identifier: string,
+    password: string,
+    rememberMe: boolean,
+    totpCode?: string,
+  ): Promise<LoginResult>;
   register(username: string, email: string, password: string): Promise<void>;
   logout(): void;
+  /** Refetch /auth/me — call after flipping 2FA so the flag in context is live. */
+  refreshUser(): Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -56,14 +65,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [user, applyStats]);
 
-  async function login(identifier: string, password: string) {
+  async function login(
+    identifier: string,
+    password: string,
+    rememberMe: boolean,
+    totpCode?: string,
+  ): Promise<LoginResult> {
     try {
-      const { data } = await api.post<{ user: User; token: string }>("/auth/login", {
-        identifier,
-        password,
-      });
-      setToken(data.token);
+      const { data } = await api.post<
+        { user: User; token: string } | { twoFactorRequired: true }
+      >("/auth/login", { identifier, password, rememberMe, totpCode });
+      if ("twoFactorRequired" in data) {
+        return { twoFactorRequired: true };
+      }
+      setToken(data.token, rememberMe);
       setUser(data.user);
+      return { ok: true };
     } catch (e) {
       throw new Error(errorMessage(e, "Login failed."));
     }
@@ -76,11 +93,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email,
         password,
       });
-      setToken(data.token);
+      setToken(data.token, true);
       setUser(data.user);
     } catch (e) {
       throw new Error(errorMessage(e, "Registration failed."));
     }
+  }
+
+  async function refreshUser() {
+    const r = await api.get<{ user: User }>("/auth/me");
+    setUser(r.data.user);
   }
 
   function logout() {
@@ -90,7 +112,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider
+      value={{ user, loading, login, register, logout, refreshUser }}
+    >
       {children}
     </AuthContext.Provider>
   );

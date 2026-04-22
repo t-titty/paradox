@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useParams } from "react-router-dom";
 import { api, errorMessage } from "../lib/api.ts";
 import { useAuth } from "../context/AuthContext.tsx";
@@ -55,7 +55,7 @@ interface FlashbackResponse {
 
 export function ProfilePage() {
   const params = useParams<{ username?: string }>();
-  const { user: me } = useAuth();
+  const { user: me, refreshUser } = useAuth();
   const username = params.username ?? me?.username ?? "";
   const isSelf = me?.username === username;
 
@@ -204,7 +204,234 @@ export function ProfilePage() {
           NO FLASHBACK AVAILABLE · YOUR OLDEST VOWS MUST BE AT LEAST {flashback.minDays} DAYS OLD.
         </section>
       )}
+
+      {isSelf && (
+        <SecuritySection
+          twoFactorEnabled={Boolean(me?.twoFactorEnabled)}
+          onChange={refreshUser}
+        />
+      )}
     </div>
+  );
+}
+
+function SecuritySection({
+  twoFactorEnabled,
+  onChange,
+}: {
+  twoFactorEnabled: boolean;
+  onChange: () => Promise<void>;
+}) {
+  return (
+    <section className="flex flex-col gap-4">
+      <h2 className="brutal-heading text-sm text-muted">SECURITY</h2>
+      <div className="border-2 border-bone p-5 md:p-6">
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b-2 border-smoke pb-4">
+          <div>
+            <p className="brutal-heading text-xl text-bone md:text-2xl">
+              TWO-FACTOR AUTHENTICATION
+            </p>
+            <p className="mt-2 font-mono text-sm text-muted">
+              TOTP via Google Authenticator, Authy, or any compatible app.
+            </p>
+          </div>
+          <span
+            className={`border-2 px-3 py-1 font-mono text-xs uppercase tracking-brutal ${
+              twoFactorEnabled ? "border-gold text-gold" : "border-smoke text-muted"
+            }`}
+          >
+            {twoFactorEnabled ? "ENABLED" : "OFF"}
+          </span>
+        </div>
+        <div className="mt-5">
+          {twoFactorEnabled ? (
+            <DisableTwoFactor onDone={onChange} />
+          ) : (
+            <EnableTwoFactor onDone={onChange} />
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+interface SetupResponse {
+  otpauthUrl: string;
+  qrDataUrl: string;
+  secret: string;
+}
+
+function EnableTwoFactor({ onDone }: { onDone: () => Promise<void> }) {
+  const [setup, setSetup] = useState<SetupResponse | null>(null);
+  const [code, setCode] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function startSetup() {
+    setError(null);
+    setBusy(true);
+    try {
+      const { data } = await api.post<SetupResponse>("/auth/2fa/setup");
+      setSetup(data);
+    } catch (e) {
+      setError(errorMessage(e, "Could not start 2FA setup."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function submitEnable(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setBusy(true);
+    try {
+      await api.post("/auth/2fa/enable", { code });
+      await onDone();
+      setSetup(null);
+      setCode("");
+    } catch (e) {
+      setError(errorMessage(e, "Invalid authenticator code."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!setup) {
+    return (
+      <div className="flex flex-col gap-3">
+        <p className="font-mono text-sm text-bone md:text-base">
+          Add a second factor so a stolen password isn't enough to take your account.
+          Requires an authenticator app on your phone.
+        </p>
+        {error && (
+          <p className="border-2 border-blood p-3 font-mono text-sm text-blood">
+            {error}
+          </p>
+        )}
+        <button
+          onClick={startSetup}
+          disabled={busy}
+          className="brutal-btn brutal-btn-gold self-start"
+        >
+          {busy ? "..." : "ENABLE 2FA"}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={submitEnable} className="flex flex-col gap-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-[auto_1fr]">
+        <div className="border-2 border-gold bg-bone p-2 self-start">
+          <img
+            src={setup.qrDataUrl}
+            alt="Scan with your authenticator app"
+            width={192}
+            height={192}
+            className="block"
+          />
+        </div>
+        <div className="flex flex-col gap-3 font-mono text-sm text-bone">
+          <div>
+            <p className="brutal-heading text-xs text-gold">STEP 1</p>
+            <p className="mt-1">Scan the QR code with your authenticator app.</p>
+          </div>
+          <div>
+            <p className="brutal-heading text-xs text-gold">MANUAL ENTRY</p>
+            <code className="mt-1 block break-all border-2 border-smoke p-2 text-xs text-bone">
+              {setup.secret}
+            </code>
+          </div>
+          <div>
+            <p className="brutal-heading text-xs text-gold">STEP 2</p>
+            <p className="mt-1">Enter the 6-digit code it generates below.</p>
+          </div>
+        </div>
+      </div>
+      <input
+        className="brutal-input text-center text-2xl tracking-[0.5em]"
+        placeholder="000000"
+        value={code}
+        onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+        inputMode="numeric"
+        autoComplete="one-time-code"
+        maxLength={6}
+        required
+        autoFocus
+      />
+      {error && (
+        <p className="border-2 border-blood p-3 font-mono text-sm text-blood">{error}</p>
+      )}
+      <div className="flex flex-wrap gap-3">
+        <button
+          type="submit"
+          disabled={busy || code.length !== 6}
+          className="brutal-btn brutal-btn-gold"
+        >
+          {busy ? "..." : "CONFIRM & ENABLE"}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setSetup(null);
+            setCode("");
+            setError(null);
+          }}
+          className="brutal-btn"
+        >
+          CANCEL
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function DisableTwoFactor({ onDone }: { onDone: () => Promise<void> }) {
+  const [code, setCode] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function submitDisable(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setBusy(true);
+    try {
+      await api.post("/auth/2fa/disable", { code });
+      await onDone();
+      setCode("");
+    } catch (e) {
+      setError(errorMessage(e, "Invalid authenticator code."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form onSubmit={submitDisable} className="flex flex-col gap-4">
+      <p className="font-mono text-sm text-bone md:text-base">
+        Enter a current 6-digit code from your authenticator app to turn 2FA off.
+      </p>
+      <input
+        className="brutal-input text-center text-2xl tracking-[0.5em]"
+        placeholder="000000"
+        value={code}
+        onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+        inputMode="numeric"
+        autoComplete="one-time-code"
+        maxLength={6}
+        required
+      />
+      {error && (
+        <p className="border-2 border-blood p-3 font-mono text-sm text-blood">{error}</p>
+      )}
+      <button
+        type="submit"
+        disabled={busy || code.length !== 6}
+        className="brutal-btn brutal-btn-blood self-start"
+      >
+        {busy ? "..." : "DISABLE 2FA"}
+      </button>
+    </form>
   );
 }
 

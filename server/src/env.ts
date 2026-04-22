@@ -14,6 +14,7 @@ const schema = z.object({
   DATABASE_URL: z.string().url(),
   JWT_SECRET: z.string().min(32, "JWT_SECRET must be at least 32 characters"),
   JWT_EXPIRES_IN: z.string().default("7d"),
+  JWT_EXPIRES_IN_REMEMBER: z.string().default("30d"),
   ANTHROPIC_API_KEY: z.string().min(1),
   ANTHROPIC_MODEL: z.string().default("claude-sonnet-4-6"),
   PHASE_DROP_HOUR: z.coerce.number().int().min(0).max(23).default(8),

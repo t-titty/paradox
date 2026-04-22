@@ -15,18 +15,35 @@ export const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem(TOKEN_KEY);
+  const token = getToken();
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
-export function setToken(token: string | null): void {
-  if (token) localStorage.setItem(TOKEN_KEY, token);
-  else localStorage.removeItem(TOKEN_KEY);
+/**
+ * Token storage strategy:
+ *   remember=true  → localStorage (survives browser close, up to the JWT's 30d TTL)
+ *   remember=false → sessionStorage (dies when the tab closes)
+ * We always clear the "other" store on write so only one copy ever exists.
+ * Logout (token=null) clears both.
+ */
+export function setToken(token: string | null, remember: boolean = true): void {
+  if (!token) {
+    localStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem(TOKEN_KEY);
+    return;
+  }
+  if (remember) {
+    localStorage.setItem(TOKEN_KEY, token);
+    sessionStorage.removeItem(TOKEN_KEY);
+  } else {
+    sessionStorage.setItem(TOKEN_KEY, token);
+    localStorage.removeItem(TOKEN_KEY);
+  }
 }
 
 export function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
+  return localStorage.getItem(TOKEN_KEY) ?? sessionStorage.getItem(TOKEN_KEY);
 }
 
 /** Extract a user-facing error message from an axios error. */

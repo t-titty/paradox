@@ -12,9 +12,10 @@ interface JwtPayload {
   sub: string;
 }
 
-export function signToken(userId: string): string {
+export function signToken(userId: string, rememberMe = false): string {
+  const expiresIn = rememberMe ? env.JWT_EXPIRES_IN_REMEMBER : env.JWT_EXPIRES_IN;
   return jwt.sign({ sub: userId }, env.JWT_SECRET, {
-    expiresIn: env.JWT_EXPIRES_IN,
+    expiresIn,
   } as jwt.SignOptions);
 }
 

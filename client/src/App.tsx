@@ -106,6 +106,11 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
+      <footer className="border-t-2 border-smoke px-4 py-6 md:px-6">
+        <p className="font-mono text-xs uppercase tracking-brutal text-muted">
+          © 2026 PARADOX. All rights reserved.
+        </p>
+      </footer>
     </div>
     </TestModeProvider>
   );

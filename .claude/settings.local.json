@@ -17,7 +17,8 @@
       "PowerShell(npm *)",
       "PowerShell(Get-Process | Where-Object { $_.ProcessName -match 'node|tsserver|code' } | Select-Object Id, ProcessName, StartTime, Path | Format-Table -AutoSize)",
       "PowerShell($schema = Get-Item C:\\\\Users\\\\travi\\\\paradox\\\\server\\\\prisma\\\\schema.prisma; $client = Get-Item C:\\\\Users\\\\travi\\\\paradox\\\\node_modules\\\\.prisma\\\\client\\\\index.d.ts -ErrorAction SilentlyContinue; Write-Output \"schema: $\\($schema.LastWriteTime\\)\"; Write-Output \"client: $\\($client.LastWriteTime\\)\")",
-      "PowerShell(git *)"
+      "PowerShell(git *)",
+      "PowerShell(if \\(Test-Path server\\\\dist\\\\routes\\\\auth.js\\) { Write-Output \"auth.js built ok\" } else { Write-Output \"MISSING\" }; Select-String -Path server\\\\dist\\\\routes\\\\auth.js -Pattern \"passwordResetToken\" | Measure-Object | ForEach-Object { \"passwordResetToken refs in build: $\\($_.Count\\)\" })"
     ]
   }
 }

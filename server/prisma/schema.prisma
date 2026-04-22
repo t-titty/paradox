@@ -90,6 +90,27 @@ model User {
   ownedCircles       Circle[]           @relation("CircleOwner")
   circleMemberships  CircleMembership[]
   inviteCodesCreated CircleInviteCode[] @relation("InviteCreator")
+
+  passwordResetTokens PasswordResetToken[]
+}
+
+// Single-use password reset tokens. `token` is a random hex string
+// (crypto.randomBytes(32).toString("hex")) stored plainly — it's already
+// high-entropy and expires within an hour; treat it like a session token,
+// not a password. `usedAt` flips on successful reset so replay fails.
+// Cascade on user delete keeps the table clean.
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  token     String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model Paradox {

@@ -2,7 +2,13 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useAuth } from "../context/AuthContext.tsx";
 import { api, errorMessage } from "../lib/api.ts";
 
-type Tab = "stats" | "paradoxes" | "submissions" | "feedback" | "users";
+type Tab =
+  | "stats"
+  | "paradoxes"
+  | "submissions"
+  | "feedback"
+  | "users"
+  | "developer";
 
 interface Stats {
   totalUsers: number;
@@ -57,6 +63,7 @@ interface AdminUser {
   isAdmin: boolean;
   isBanned: boolean;
   isGrantedCircleAccess: boolean;
+  testMode: boolean;
   createdAt: string;
   tribeHistory: { tribe: string; airDate: string }[];
 }
@@ -89,6 +96,7 @@ export function AdminPage() {
         <TabBtn active={tab === "submissions"} onClick={() => setTab("submissions")}>SUBMISSIONS</TabBtn>
         <TabBtn active={tab === "feedback"} onClick={() => setTab("feedback")}>FEEDBACK</TabBtn>
         <TabBtn active={tab === "users"} onClick={() => setTab("users")}>USERS</TabBtn>
+        <TabBtn active={tab === "developer"} onClick={() => setTab("developer")}>DEVELOPER</TabBtn>
       </nav>
 
       {tab === "stats" && <StatsPanel />}
@@ -96,6 +104,7 @@ export function AdminPage() {
       {tab === "submissions" && <SubmissionsPanel />}
       {tab === "feedback" && <FeedbackPanel />}
       {tab === "users" && <UsersPanel />}
+      {tab === "developer" && <DeveloperPanel />}
     </div>
   );
 }
@@ -665,6 +674,160 @@ function Pill({ color, children }: { color: "gold" | "blood"; children: React.Re
     <span className={`border px-1 py-[1px] text-[10px] uppercase tracking-brutal ${cls}`}>
       {children}
     </span>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// DEVELOPER CONTROLS
+// ─────────────────────────────────────────────────────────────────────────
+
+function DeveloperPanel() {
+  const [systemTestMode, setSystemTestMode] = useState<boolean | null>(null);
+  const [users, setUsers] = useState<AdminUser[] | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const [dev, u] = await Promise.all([
+        api.get<{ systemTestMode: boolean }>("/admin/developer"),
+        api.get<{ users: AdminUser[] }>("/admin/users"),
+      ]);
+      setSystemTestMode(dev.data.systemTestMode);
+      setUsers(u.data.users);
+      setErr(null);
+    } catch (e) {
+      setErr(errorMessage(e, "Could not load developer controls."));
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function toggleTestMode(id: string, name: string, enabled: boolean) {
+    if (
+      !confirm(
+        enabled
+          ? `Enable test mode for ${name}? They'll see the test banner and can switch phases.`
+          : `Disable test mode for ${name}?`,
+      )
+    )
+      return;
+    try {
+      await api.post(`/admin/users/${id}/test-mode`, { enabled });
+      load();
+    } catch (e) {
+      setErr(errorMessage(e, "Toggle failed."));
+    }
+  }
+
+  if (err) return <ErrorBox>{err}</ErrorBox>;
+  if (systemTestMode === null || !users) {
+    return <p className="brutal-heading text-muted">LOADING...</p>;
+  }
+
+  // Show admins + anyone with per-user test mode on. Everyone else is
+  // irrelevant here — the panel is for dev/test accounts, not all users.
+  const dev = users.filter((u) => u.isAdmin || u.testMode);
+
+  return (
+    <div className="flex flex-col gap-8">
+      <section>
+        <p className="font-mono text-xs uppercase tracking-brutal text-muted">
+          SYSTEM TEST MODE
+        </p>
+        <div className="mt-2 flex flex-wrap items-center gap-4 border-2 border-bone p-4">
+          <span
+            className={`border-2 px-3 py-1 font-mono text-xs uppercase tracking-brutal ${
+              systemTestMode
+                ? "border-gold bg-gold text-ink"
+                : "border-smoke text-muted"
+            }`}
+          >
+            {systemTestMode ? "ACTIVE" : "OFF"}
+          </span>
+          <p className="font-mono text-sm text-bone">
+            {systemTestMode
+              ? "TEST_MODE env var is ON — every user sees test mode."
+              : "TEST_MODE env var is OFF — only per-user toggles apply."}
+          </p>
+        </div>
+        <p className="mt-2 font-mono text-xs uppercase tracking-brutal text-muted">
+          Flip via the TEST_MODE variable in Railway. Redeploy takes effect.
+        </p>
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <p className="font-mono text-xs uppercase tracking-brutal text-muted">
+          PER-USER TEST MODE ({dev.length} SHOWN)
+        </p>
+        <div className="overflow-x-auto border-2 border-bone">
+          <table className="w-full font-mono text-sm">
+            <thead className="border-b-2 border-bone bg-smoke/20">
+              <tr className="text-left uppercase tracking-brutal">
+                <th className="px-3 py-2 text-xs">USER</th>
+                <th className="px-3 py-2 text-xs">FLAGS</th>
+                <th className="px-3 py-2 text-xs">TEST MODE</th>
+                <th className="px-3 py-2 text-xs">ACTIONS</th>
+              </tr>
+            </thead>
+            <tbody>
+              {dev.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="px-3 py-6 text-center text-muted">
+                    No admin or test users yet.
+                  </td>
+                </tr>
+              ) : (
+                dev.map((u) => (
+                  <tr key={u.id} className="border-b border-smoke align-top">
+                    <td className="px-3 py-3">
+                      <p className="text-bone">{u.username}</p>
+                      <p className="text-xs text-muted">{u.email}</p>
+                    </td>
+                    <td className="px-3 py-3">
+                      <div className="flex flex-wrap gap-1">
+                        {u.isAdmin && <Pill color="gold">ADMIN</Pill>}
+                        {u.testMode && <Pill color="gold">TESTER</Pill>}
+                        {u.isBanned && <Pill color="blood">BANNED</Pill>}
+                      </div>
+                    </td>
+                    <td className="px-3 py-3">
+                      <span
+                        className={`border px-2 py-[2px] text-xs uppercase tracking-brutal ${
+                          u.testMode
+                            ? "border-gold text-gold"
+                            : "border-smoke text-muted"
+                        }`}
+                      >
+                        {u.testMode ? "ON" : "OFF"}
+                      </span>
+                    </td>
+                    <td className="px-3 py-3">
+                      <button
+                        className={`border px-2 py-1 text-xs uppercase tracking-brutal ${
+                          u.testMode
+                            ? "border-blood text-blood hover:bg-blood hover:text-ink"
+                            : "border-gold text-gold hover:bg-gold hover:text-ink"
+                        }`}
+                        onClick={() =>
+                          toggleTestMode(u.id, u.username, !u.testMode)
+                        }
+                      >
+                        {u.testMode ? "DISABLE" : "ENABLE"}
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+        <p className="font-mono text-xs uppercase tracking-brutal text-muted">
+          Regular users are hidden. Grant admin first to make someone visible here.
+        </p>
+      </section>
+    </div>
   );
 }
 

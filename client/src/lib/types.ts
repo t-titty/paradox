@@ -33,6 +33,10 @@ export interface User {
    *  Distinct from hasCircleAccess — governs whether the MANAGE nav link
    *  is shown, not whether the user can *create* a new circle. */
   ownsOrAdminsCircle?: boolean;
+  /** Server-derived effective test-mode flag: system env.TEST_MODE OR the
+   *  admin-granted per-user testMode column. Drives the test-mode banner
+   *  and phase switcher — hidden from regular users. */
+  testMode?: boolean;
 }
 
 export interface Paradox {

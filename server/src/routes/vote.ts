@@ -1,12 +1,12 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../db.js";
-import { env } from "../env.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { HttpError } from "../middleware/error.js";
 import { validateJustification } from "../lib/sentence.js";
 import { containsProfanity } from "../lib/profanity.js";
 import { parseYmd, resolvePhase } from "../phases.js";
+import { effectiveTestMode } from "../lib/testMode.js";
 
 export const voteRouter = Router();
 
@@ -26,9 +26,10 @@ voteRouter.post("/", requireAuth, async (req, res, next) => {
     const { paradoxId, choice, justification } = voteSchema.parse(req.body);
 
     const phase = resolvePhase();
+    const testMode = await effectiveTestMode(userId);
     // Voting only during the vow window. Allow PHASE_OVERRIDE=vow for demos.
-    // Test mode bypasses the phase gate entirely.
-    if (!env.TEST_MODE && phase.phase !== "vow") {
+    // System or per-user test mode bypasses the phase gate entirely.
+    if (!testMode && phase.phase !== "vow") {
       throw new HttpError(
         403,
         "Voting is closed. The Vow window has passed.",
@@ -54,7 +55,7 @@ voteRouter.post("/", requireAuth, async (req, res, next) => {
     });
     if (!paradox) throw new HttpError(404, "Paradox not found", "not_found");
     if (
-      !env.TEST_MODE &&
+      !testMode &&
       (!paradox.airDate || paradox.airDate.getTime() !== parseYmd(phase.today).getTime())
     ) {
       throw new HttpError(400, "This paradox is not today's Drop", "wrong_paradox");

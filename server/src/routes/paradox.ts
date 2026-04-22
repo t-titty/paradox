@@ -2,7 +2,8 @@ import { Router } from "express";
 import { prisma } from "../db.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { HttpError } from "../middleware/error.js";
-import { parseYmd, resolvePhaseWithOverride } from "../phases.js";
+import { parseYmd } from "../phases.js";
+import { resolvePhaseForUser } from "../lib/testMode.js";
 import { findThrowbackVote } from "../lib/throwback.js";
 
 export const paradoxRouter = Router();
@@ -18,7 +19,7 @@ paradoxRouter.get("/today", requireAuth, async (req, res, next) => {
   try {
     const { userId } = req as AuthedRequest;
     const phaseOverride = typeof req.query.phase === "string" ? req.query.phase : null;
-    const phase = resolvePhaseWithOverride(phaseOverride);
+    const phase = await resolvePhaseForUser(userId, phaseOverride);
 
     // Throwback path — only surfaced during the vow window. After the vow
     // window closes, fall back to the normal daily flow for sort/duel/bridge.

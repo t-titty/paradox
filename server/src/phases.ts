@@ -13,25 +13,6 @@ export interface PhaseState {
 }
 
 /**
- * When test mode is on, accept a per-request phase override. Non-testers
- * can't force this — we only honor the override when env.TEST_MODE.
- */
-export function resolvePhaseWithOverride(
-  requestedPhase?: string | null,
-  now: Date = new Date(),
-): PhaseState {
-  const state = resolvePhase(now);
-  if (!env.TEST_MODE) return state;
-  if (!requestedPhase) return state;
-  if (!isPhase(requestedPhase)) return state;
-  return { ...state, phase: requestedPhase };
-}
-
-function isPhase(v: string): v is Phase {
-  return v === "drop" || v === "vow" || v === "sort" || v === "duel" || v === "bridge";
-}
-
-/**
  * Phase resolution is single-source-of-truth on the server. The client trusts
  * this so all phase-gating logic lives in one place.
  *

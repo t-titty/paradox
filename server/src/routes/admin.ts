@@ -1,10 +1,13 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../db.js";
-import { env } from "../env.js";
 import { requireAdmin } from "../middleware/auth.js";
 import { HttpError } from "../middleware/error.js";
 import { parseYmd, ymd } from "../phases.js";
+import {
+  TEST_MODE_SETTING_KEY,
+  systemTestModeEnabled,
+} from "../lib/testMode.js";
 
 export const adminRouter = Router();
 
@@ -338,36 +341,67 @@ adminRouter.post("/users/:id/grant-circle-access", async (req, res, next) => {
 });
 
 // ──────────────────────────────────────────────────────────────────────────
-// Developer Controls
+// Developer Controls / System Settings
 // ──────────────────────────────────────────────────────────────────────────
 
 /**
  * GET /api/admin/developer
- * Reports system-level developer switches so the admin panel can show
- * whether platform-wide test mode is on (i.e. TEST_MODE env var set on
- * Railway). Per-user testMode status comes from the /users endpoint.
+ * Convenience view of developer-surfaced switches for the admin panel.
+ * Currently just mirrors the SystemSetting.TEST_MODE value so the panel
+ * can render its toggle without a separate settings fetch.
  */
-adminRouter.get("/developer", (_req, res) => {
-  res.json({ systemTestMode: env.TEST_MODE });
+adminRouter.get("/developer", async (_req, res, next) => {
+  try {
+    const systemTestMode = await systemTestModeEnabled();
+    res.json({ systemTestMode });
+  } catch (e) {
+    next(e);
+  }
 });
 
-const testModeSchema = z.object({ enabled: z.boolean() });
+/**
+ * GET /api/admin/settings
+ * Return every SystemSetting row. Small table by design (operator toggles,
+ * not user data), so no pagination. Values are strings — callers parse per
+ * setting.
+ */
+adminRouter.get("/settings", async (_req, res, next) => {
+  try {
+    const settings = await prisma.systemSetting.findMany({
+      orderBy: { key: "asc" },
+      select: { key: true, value: true, updatedAt: true },
+    });
+    res.json({ settings });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// Whitelist of keys that may be written through the admin API. Blocks
+// arbitrary key creation that would accumulate into a cluttered table.
+const ALLOWED_SETTING_KEYS = [TEST_MODE_SETTING_KEY] as const;
+
+const settingUpsertSchema = z.object({
+  key: z.enum(ALLOWED_SETTING_KEYS),
+  value: z.string().min(1).max(200),
+});
 
 /**
- * POST /api/admin/users/:id/test-mode
- * Per-user test-mode toggle. Unlocks phase switching, date-check bypass,
- * and the banner for that user only. Combined with env.TEST_MODE via
- * `effectiveTestMode` (OR) at request time.
+ * POST /api/admin/settings
+ * Upsert a SystemSetting by key. Only keys in `ALLOWED_SETTING_KEYS` are
+ * accepted — new settings need a code change so the client knows how to
+ * render and interpret them.
  */
-adminRouter.post("/users/:id/test-mode", async (req, res, next) => {
+adminRouter.post("/settings", async (req, res, next) => {
   try {
-    const { enabled } = testModeSchema.parse(req.body);
-    const user = await prisma.user.update({
-      where: { id: req.params.id },
-      data: { testMode: enabled },
-      select: { id: true, username: true, testMode: true },
+    const { key, value } = settingUpsertSchema.parse(req.body);
+    const setting = await prisma.systemSetting.upsert({
+      where: { key },
+      update: { value },
+      create: { key, value },
+      select: { key: true, value: true, updatedAt: true },
     });
-    res.json({ user });
+    res.json({ setting });
   } catch (e) {
     next(e);
   }

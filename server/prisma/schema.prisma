@@ -72,10 +72,10 @@ model User {
   // Admin-granted bypass for the Circle creation paywall. Paid subscribers
   // are gated via Circle.subscriptionStatus instead.
   isGrantedCircleAccess Boolean @default(false)
-  // Admin-granted per-user test mode. Unlocks phase switching, date-check
-  // bypass, and the test-mode banner for this user only. Combined with the
-  // system-wide env.TEST_MODE by `effectiveTestMode` (OR). Invisible to
-  // regular users — the toggle lives in the admin Developer panel.
+  // Legacy per-user test-mode column. Kept for data preservation; no
+  // longer consulted — test mode is now driven by SystemSetting.TEST_MODE
+  // plus isAdmin. Drop in a future migration once we're sure nothing
+  // references it.
   testMode       Boolean  @default(false)
   createdAt      DateTime @default(now())
 
@@ -92,6 +92,18 @@ model User {
   inviteCodesCreated CircleInviteCode[] @relation("InviteCreator")
 
   passwordResetTokens PasswordResetToken[]
+}
+
+// Generic key/value table for operator-togglable runtime settings. Today
+// it holds a single row: `TEST_MODE` (value = "true" | "false"), which the
+// admin Developer panel flips. Extensible to any flag that should change
+// without a redeploy. Values are stored as strings — callers parse per
+// setting (e.g. boolean-from-string for TEST_MODE).
+model SystemSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt
 }
 
 // Single-use password reset tokens. `token` is a random hex string

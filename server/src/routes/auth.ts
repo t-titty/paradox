@@ -11,6 +11,7 @@ import { containsProfanity } from "../lib/profanity.js";
 import { userHasCircleAccess, userOwnsOrAdminsCircle } from "../lib/circleAccess.js";
 import { env } from "../env.js";
 import { sendEmail } from "../lib/email.js";
+import { systemTestModeEnabled } from "../lib/testMode.js";
 
 export const authRouter = Router();
 
@@ -41,9 +42,10 @@ const totpCodeSchema = z.object({
   code: z.string().regex(/^\d{6}$/, "Code must be 6 digits"),
 });
 
-// Shape returned in every auth-issuing response. `testMode` is selected
-// from the DB so we can compute the effective flag inline (system env OR
-// per-user flag) without a second query.
+// Shape returned in every auth-issuing response. Note: the User.testMode
+// column is no longer selected — the outgoing `testMode` flag on the DTO
+// is computed from (isAdmin AND SystemSetting.TEST_MODE="true"), not from
+// the legacy per-user column.
 const userSelect = {
   id: true,
   username: true,
@@ -53,7 +55,6 @@ const userSelect = {
   isPremium: true,
   isAdmin: true,
   twoFactorEnabled: true,
-  testMode: true,
 } as const;
 
 type MeUser = {
@@ -65,24 +66,24 @@ type MeUser = {
   isPremium: boolean;
   isAdmin: boolean;
   twoFactorEnabled: boolean;
-  testMode: boolean;
 };
 
 // Wrap the DB row with derived circle flags + effective test mode so the
 // client can render the paywall CTA, gate the MANAGE nav, and show the
-// test-mode banner without a second request. The outgoing `testMode`
-// replaces the raw column: it's `env.TEST_MODE || user.testMode`, which is
-// what every UI decision wants.
+// test-mode banner without a second request. `testMode` is true iff the
+// user is an admin AND the SystemSetting.TEST_MODE toggle is "true" —
+// regular users never see test-mode UI regardless of the global setting.
 async function withAccessFlags<T extends MeUser>(user: T) {
-  const [hasCircleAccess, ownsOrAdminsCircle] = await Promise.all([
+  const [hasCircleAccess, ownsOrAdminsCircle, systemTestMode] = await Promise.all([
     userHasCircleAccess(user.id),
     userOwnsOrAdminsCircle(user.id),
+    systemTestModeEnabled(),
   ]);
   return {
     ...user,
     hasCircleAccess,
     ownsOrAdminsCircle,
-    testMode: env.TEST_MODE || user.testMode,
+    testMode: user.isAdmin && systemTestMode,
   };
 }
 
@@ -167,7 +168,6 @@ authRouter.post("/login", async (req, res, next) => {
         isPremium: user.isPremium,
         isAdmin: user.isAdmin,
         twoFactorEnabled: user.twoFactorEnabled,
-        testMode: user.testMode,
       }),
       token: signToken(user.id, rememberMe),
     });

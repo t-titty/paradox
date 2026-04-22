@@ -683,17 +683,16 @@ function Pill({ color, children }: { color: "gold" | "blood"; children: React.Re
 
 function DeveloperPanel() {
   const [systemTestMode, setSystemTestMode] = useState<boolean | null>(null);
-  const [users, setUsers] = useState<AdminUser[] | null>(null);
+  const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const { refreshUser } = useAuth();
 
   const load = useCallback(async () => {
     try {
-      const [dev, u] = await Promise.all([
-        api.get<{ systemTestMode: boolean }>("/admin/developer"),
-        api.get<{ users: AdminUser[] }>("/admin/users"),
-      ]);
-      setSystemTestMode(dev.data.systemTestMode);
-      setUsers(u.data.users);
+      const { data } = await api.get<{ systemTestMode: boolean }>(
+        "/admin/developer",
+      );
+      setSystemTestMode(data.systemTestMode);
       setErr(null);
     } catch (e) {
       setErr(errorMessage(e, "Could not load developer controls."));
@@ -704,128 +703,90 @@ function DeveloperPanel() {
     load();
   }, [load]);
 
-  async function toggleTestMode(id: string, name: string, enabled: boolean) {
-    if (
-      !confirm(
-        enabled
-          ? `Enable test mode for ${name}? They'll see the test banner and can switch phases.`
-          : `Disable test mode for ${name}?`,
-      )
-    )
-      return;
+  async function toggleSystemTestMode() {
+    if (systemTestMode === null || busy) return;
+    const next = !systemTestMode;
+    setBusy(true);
+    setErr(null);
     try {
-      await api.post(`/admin/users/${id}/test-mode`, { enabled });
-      load();
+      await api.post("/admin/settings", {
+        key: "TEST_MODE",
+        value: next ? "true" : "false",
+      });
+      setSystemTestMode(next);
+      // Refresh the current user so the effective test-mode flag on the
+      // AuthContext.user object flips immediately — the banner and phase
+      // switcher both read from it.
+      await refreshUser();
     } catch (e) {
       setErr(errorMessage(e, "Toggle failed."));
+    } finally {
+      setBusy(false);
     }
   }
 
   if (err) return <ErrorBox>{err}</ErrorBox>;
-  if (systemTestMode === null || !users) {
+  if (systemTestMode === null) {
     return <p className="brutal-heading text-muted">LOADING...</p>;
   }
 
-  // Show admins + anyone with per-user test mode on. Everyone else is
-  // irrelevant here — the panel is for dev/test accounts, not all users.
-  const dev = users.filter((u) => u.isAdmin || u.testMode);
-
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-6">
       <section>
         <p className="font-mono text-xs uppercase tracking-brutal text-muted">
           SYSTEM TEST MODE
         </p>
-        <div className="mt-2 flex flex-wrap items-center gap-4 border-2 border-bone p-4">
-          <span
-            className={`border-2 px-3 py-1 font-mono text-xs uppercase tracking-brutal ${
-              systemTestMode
-                ? "border-gold bg-gold text-ink"
-                : "border-smoke text-muted"
-            }`}
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-4 border-2 border-bone p-4 md:p-5">
+          <div>
+            <p className="brutal-heading text-xl text-bone md:text-2xl">
+              {systemTestMode ? "ACTIVE." : "OFF."}
+            </p>
+            <p className="mt-2 font-mono text-sm text-bone">
+              {systemTestMode
+                ? "Every admin sees the test banner and can switch phases."
+                : "No one sees the test banner — phase gates are enforced for everyone."}
+            </p>
+            <p className="mt-2 font-mono text-xs uppercase tracking-brutal text-muted">
+              Regular users never see test mode regardless of this setting.
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={systemTestMode}
+            aria-label="System test mode"
+            disabled={busy}
+            onClick={toggleSystemTestMode}
+            className={`relative h-8 w-16 border-2 transition-colors ${
+              systemTestMode ? "border-gold bg-gold" : "border-smoke bg-ink"
+            } ${busy ? "opacity-60" : ""}`}
           >
-            {systemTestMode ? "ACTIVE" : "OFF"}
-          </span>
-          <p className="font-mono text-sm text-bone">
-            {systemTestMode
-              ? "TEST_MODE env var is ON — every user sees test mode."
-              : "TEST_MODE env var is OFF — only per-user toggles apply."}
-          </p>
+            <span
+              aria-hidden="true"
+              className={`absolute top-[2px] h-6 w-6 transition-transform ${
+                systemTestMode ? "translate-x-[34px] bg-ink" : "translate-x-[2px] bg-bone"
+              }`}
+            />
+          </button>
         </div>
-        <p className="mt-2 font-mono text-xs uppercase tracking-brutal text-muted">
-          Flip via the TEST_MODE variable in Railway. Redeploy takes effect.
-        </p>
       </section>
 
-      <section className="flex flex-col gap-3">
-        <p className="font-mono text-xs uppercase tracking-brutal text-muted">
-          PER-USER TEST MODE ({dev.length} SHOWN)
-        </p>
-        <div className="overflow-x-auto border-2 border-bone">
-          <table className="w-full font-mono text-sm">
-            <thead className="border-b-2 border-bone bg-smoke/20">
-              <tr className="text-left uppercase tracking-brutal">
-                <th className="px-3 py-2 text-xs">USER</th>
-                <th className="px-3 py-2 text-xs">FLAGS</th>
-                <th className="px-3 py-2 text-xs">TEST MODE</th>
-                <th className="px-3 py-2 text-xs">ACTIONS</th>
-              </tr>
-            </thead>
-            <tbody>
-              {dev.length === 0 ? (
-                <tr>
-                  <td colSpan={4} className="px-3 py-6 text-center text-muted">
-                    No admin or test users yet.
-                  </td>
-                </tr>
-              ) : (
-                dev.map((u) => (
-                  <tr key={u.id} className="border-b border-smoke align-top">
-                    <td className="px-3 py-3">
-                      <p className="text-bone">{u.username}</p>
-                      <p className="text-xs text-muted">{u.email}</p>
-                    </td>
-                    <td className="px-3 py-3">
-                      <div className="flex flex-wrap gap-1">
-                        {u.isAdmin && <Pill color="gold">ADMIN</Pill>}
-                        {u.testMode && <Pill color="gold">TESTER</Pill>}
-                        {u.isBanned && <Pill color="blood">BANNED</Pill>}
-                      </div>
-                    </td>
-                    <td className="px-3 py-3">
-                      <span
-                        className={`border px-2 py-[2px] text-xs uppercase tracking-brutal ${
-                          u.testMode
-                            ? "border-gold text-gold"
-                            : "border-smoke text-muted"
-                        }`}
-                      >
-                        {u.testMode ? "ON" : "OFF"}
-                      </span>
-                    </td>
-                    <td className="px-3 py-3">
-                      <button
-                        className={`border px-2 py-1 text-xs uppercase tracking-brutal ${
-                          u.testMode
-                            ? "border-blood text-blood hover:bg-blood hover:text-ink"
-                            : "border-gold text-gold hover:bg-gold hover:text-ink"
-                        }`}
-                        onClick={() =>
-                          toggleTestMode(u.id, u.username, !u.testMode)
-                        }
-                      >
-                        {u.testMode ? "DISABLE" : "ENABLE"}
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-        <p className="font-mono text-xs uppercase tracking-brutal text-muted">
-          Regular users are hidden. Grant admin first to make someone visible here.
-        </p>
+      <section className="border-2 border-smoke p-4">
+        <p className="brutal-heading text-xs text-gold">HOW IT WORKS</p>
+        <ul className="mt-3 flex flex-col gap-2 font-mono text-sm text-bone">
+          <li className="border-l-2 border-smoke pl-3">
+            Stored in the <span className="text-gold">SystemSetting</span>{" "}
+            table keyed on <span className="text-gold">TEST_MODE</span>.
+          </li>
+          <li className="border-l-2 border-smoke pl-3">
+            Effective flag = <span className="text-gold">isAdmin</span> AND{" "}
+            <span className="text-gold">TEST_MODE = &quot;true&quot;</span>.
+          </li>
+          <li className="border-l-2 border-smoke pl-3">
+            Unlocks phase switching, date-check bypass, and the top banner
+            for every admin as soon as you flip it.
+          </li>
+        </ul>
       </section>
     </div>
   );

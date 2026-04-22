@@ -40,6 +40,7 @@ export function Header() {
             {user && <Nav to="/library">LIBRARY</Nav>}
             {user && <Nav to="/submit">SUBMIT</Nav>}
             <Nav to="/circles">CIRCLES</Nav>
+            {user && <Nav to="/circles/manage">MANAGE</Nav>}
             {user && <Nav to="/feedback">FEEDBACK</Nav>}
             {user?.isAdmin && <Nav to="/admin">ADMIN</Nav>}
           </nav>
@@ -81,6 +82,7 @@ export function Header() {
             {user && <MobileNav to="/library" onClick={closeMenu}>LIBRARY</MobileNav>}
             {user && <MobileNav to="/submit" onClick={closeMenu}>SUBMIT</MobileNav>}
             <MobileNav to="/circles" onClick={closeMenu}>CIRCLES</MobileNav>
+            {user && <MobileNav to="/circles/manage" onClick={closeMenu}>MANAGE</MobileNav>}
             {user && <MobileNav to="/feedback" onClick={closeMenu}>FEEDBACK</MobileNav>}
             {user?.isAdmin && <MobileNav to="/admin" onClick={closeMenu}>ADMIN</MobileNav>}
           </nav>

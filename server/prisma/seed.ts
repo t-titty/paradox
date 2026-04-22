@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { PARADOXES } from "./paradoxes.js";
+import { ALL_PACKS } from "./paradox-packs.js";
 
 const prisma = new PrismaClient();
 
@@ -30,6 +31,18 @@ async function main() {
   }
 
   console.log(`[seed] ${PARADOXES.length} paradoxes scheduled starting ${today.toDateString()}`);
+
+  // Private Circles paradox packs — JR_HIGH / HIGH_SCHOOL / UNIVERSITY /
+  // CORPORATE. STANDARD is intentionally not seeded here (circles on STANDARD
+  // draw from the same global Paradox pool above).
+  for (const { pkg, data } of ALL_PACKS) {
+    await prisma.circleParadoxPack.upsert({
+      where: { package: pkg },
+      update: { paradoxes: data },
+      create: { package: pkg, paradoxes: data },
+    });
+  }
+  console.log(`[seed] ${ALL_PACKS.length} circle paradox packs upserted`);
 }
 
 main()

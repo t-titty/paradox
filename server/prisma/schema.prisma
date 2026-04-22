@@ -32,6 +32,28 @@ enum SubmittedParadoxStatus {
   rejected
 }
 
+enum CircleType {
+  JUNIOR_HIGH
+  HIGH_SCHOOL
+  UNIVERSITY
+  CORPORATE
+}
+
+enum MembershipRole {
+  OWNER
+  ADMIN
+  MODERATOR
+  MEMBER
+}
+
+enum ParadoxPackage {
+  STANDARD
+  JUNIOR_HIGH
+  HIGH_SCHOOL
+  UNIVERSITY
+  CORPORATE
+}
+
 model User {
   id             String   @id @default(cuid())
   username       String   @unique
@@ -54,6 +76,9 @@ model User {
   feedback         Feedback[]
   submittedParadoxes SubmittedParadox[]
   authoredParadoxes  Paradox[]          @relation("ParadoxSubmitter")
+  ownedCircles       Circle[]           @relation("CircleOwner")
+  circleMemberships  CircleMembership[]
+  inviteCodesCreated CircleInviteCode[] @relation("InviteCreator")
 }
 
 model Paradox {
@@ -92,15 +117,20 @@ model Vote {
   tribeReasoning String?
   createdAt     DateTime @default(now())
   sortedAt      DateTime?
+  // Scopes a vote to a private circle game. Null = global/public game.
+  // Runtime routing by circle game is not wired yet — see Circles rollout notes.
+  circleGameId  String?
 
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  paradox Paradox @relation(fields: [paradoxId], references: [id], onDelete: Cascade)
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  paradox    Paradox     @relation(fields: [paradoxId], references: [id], onDelete: Cascade)
+  circleGame CircleGame? @relation(fields: [circleGameId], references: [id], onDelete: SetNull)
 
   throwbackRevote ThrowbackRevote?
 
   @@unique([userId, paradoxId])
   @@index([paradoxId, choice])
   @@index([paradoxId, tribeAssigned])
+  @@index([circleGameId])
 }
 
 // Thursday revisits. Every Thursday, eligible users revote a prior
@@ -157,15 +187,19 @@ model Duel {
   bothSigned           Boolean  @default(false)
   startedAt            DateTime @default(now())
   endedAt              DateTime?
+  // Scopes a duel to a private circle game. Null = global/public game.
+  circleGameId         String?
 
-  paradox Paradox @relation(fields: [paradoxId], references: [id])
-  userA   User    @relation("DuelUserA", fields: [userAId], references: [id])
-  userB   User    @relation("DuelUserB", fields: [userBId], references: [id])
+  paradox    Paradox     @relation(fields: [paradoxId], references: [id])
+  userA      User        @relation("DuelUserA", fields: [userAId], references: [id])
+  userB      User        @relation("DuelUserB", fields: [userBId], references: [id])
+  circleGame CircleGame? @relation(fields: [circleGameId], references: [id], onDelete: SetNull)
 
   archive SynthesisArchive?
 
   @@index([paradoxId])
   @@index([bothSigned])
+  @@index([circleGameId])
 }
 
 // Minimal stub for the Private Circles application form. Stored so ops has
@@ -231,4 +265,97 @@ model SynthesisArchive {
   duel Duel @relation(fields: [duelId], references: [id], onDelete: Cascade)
 
   @@index([signedAt])
+}
+
+// Private Circles — closed instances for schools, universities, and companies.
+// A Circle holds one or more CircleGames (e.g. "Period 1 Class"). Membership
+// is per-Circle, not per-Game — members are invited into a Circle and can
+// participate in any Game within it. Stripe fields (customerId, subscriptionId,
+// seatLimit, billingPeriod, currentPeriodEnd) will be added in the Stripe pass.
+model Circle {
+  id                 String   @id @default(cuid())
+  name               String
+  type               CircleType
+  ownerId            String
+  // Free-form for now; Stripe pass will populate with "active" | "past_due" |
+  // "canceled" | etc. "trial" means the circle exists but hasn't paid.
+  subscriptionStatus String   @default("trial")
+  // Reserved for per-Circle defaults (e.g. default schedule overrides).
+  settings           Json     @default("{}")
+  createdAt          DateTime @default(now())
+
+  owner       User               @relation("CircleOwner", fields: [ownerId], references: [id])
+  memberships CircleMembership[]
+  games       CircleGame[]
+
+  @@index([ownerId])
+}
+
+model CircleMembership {
+  id       String         @id @default(cuid())
+  circleId String
+  userId   String
+  role     MembershipRole @default(MEMBER)
+  joinedAt DateTime       @default(now())
+
+  circle Circle @relation(fields: [circleId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([circleId, userId])
+  @@index([userId])
+}
+
+// One daily loop inside a Circle. Multiple Games per Circle lets a teacher
+// run separate classes on separate paradoxes. Per-game schedule fields are
+// stored now but runtime resolution is still global — wired in a later pass.
+model CircleGame {
+  id             String         @id @default(cuid())
+  circleId       String
+  name           String
+  description    String?
+  paradoxPackage ParadoxPackage @default(STANDARD)
+  dropHour       Int            @default(8)
+  vowEndHour     Int            @default(12)
+  sortEndHour    Int            @default(20)
+  duelHour       Int            @default(20)
+  isActive       Boolean        @default(true)
+  createdAt      DateTime       @default(now())
+
+  circle      Circle             @relation(fields: [circleId], references: [id], onDelete: Cascade)
+  inviteCodes CircleInviteCode[]
+  votes       Vote[]
+  duels       Duel[]
+
+  @@index([circleId])
+}
+
+// Short, shareable codes that consume into a CircleMembership on the parent
+// Circle. A code belongs to a Game so the join confirmation can show which
+// class/department the user is joining.
+model CircleInviteCode {
+  id           String    @id @default(cuid())
+  circleGameId String
+  code         String    @unique
+  uses         Int       @default(0)
+  maxUses      Int?
+  expiresAt    DateTime?
+  createdAt    DateTime  @default(now())
+  createdById  String
+
+  circleGame CircleGame @relation(fields: [circleGameId], references: [id], onDelete: Cascade)
+  createdBy  User       @relation("InviteCreator", fields: [createdById], references: [id])
+
+  @@index([circleGameId])
+}
+
+// Age/role-targeted dilemma packs. STANDARD is intentionally not stored here
+// (Games with package=STANDARD draw from the global Paradox table). The
+// paradoxes column is a JSON array of { title, description, optionA, optionB,
+// category } objects — light-weight, non-normalized since packs are content,
+// not user data.
+model CircleParadoxPack {
+  id        String         @id @default(cuid())
+  package   ParadoxPackage @unique
+  paradoxes Json
+  updatedAt DateTime       @updatedAt
 }

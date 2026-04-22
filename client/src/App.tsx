@@ -15,6 +15,8 @@ import { SubmitDilemmaPage } from "./pages/SubmitDilemmaPage.tsx";
 import { AdminPage } from "./pages/AdminPage.tsx";
 import { TermsPage } from "./pages/TermsPage.tsx";
 import { HowToPlayPage } from "./pages/HowToPlayPage.tsx";
+import { CirclesManagePage } from "./pages/CirclesManagePage.tsx";
+import { JoinCirclePage } from "./pages/JoinCirclePage.tsx";
 
 // ProfilePage pulls in Three.js + r3f (heavy). Code-split it so only users
 // who visit /profile/* pay the download cost.
@@ -95,6 +97,30 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <SubmitDilemmaPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/circles/manage"
+            element={
+              <ProtectedRoute>
+                <CirclesManagePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/circles/manage/:circleId"
+            element={
+              <ProtectedRoute>
+                <CirclesManagePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/join/:code"
+            element={
+              <ProtectedRoute>
+                <JoinCirclePage />
               </ProtectedRoute>
             }
           />

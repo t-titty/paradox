@@ -12,7 +12,8 @@
       "Bash(npx tsx *)",
       "Bash(tasklist //FI \"IMAGENAME eq node.exe\")",
       "PowerShell(Get-ChildItem -Path C:\\\\Users\\\\travi\\\\paradox\\\\server\\\\prisma\\\\migrations -Recurse -Force -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })",
-      "PowerShell(New-Item *)"
+      "PowerShell(New-Item *)",
+      "PowerShell(Get-ChildItem -Path C:\\\\Users\\\\travi\\\\paradox\\\\server\\\\src -File | ForEach-Object { $_.Name })"
     ]
   }
 }

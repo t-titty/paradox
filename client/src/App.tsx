@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { Header } from "./components/Header.tsx";
 import { TestModeBanner } from "./components/TestModeBanner.tsx";
 import { ProtectedRoute } from "./components/ProtectedRoute.tsx";
+import { AdminOnlyRoute } from "./components/AdminOnlyRoute.tsx";
 import { CirclesManageGuard } from "./components/CirclesManageGuard.tsx";
 import { NotificationPrompt } from "./components/NotificationPrompt.tsx";
 import { LoginPage } from "./pages/LoginPage.tsx";
@@ -53,19 +54,47 @@ export default function App() {
 
           {/* Public */}
           <Route path="/archive" element={<ArchivePage />} />
-          <Route path="/circles" element={<CirclesPage />} />
-          <Route path="/pricing" element={<PricingPage />} />
-          <Route path="/pricing/cancel" element={<PricingCancelPage />} />
+          <Route path="/terms" element={<TermsPage />} />
+          <Route path="/how-to-play" element={<HowToPlayPage />} />
+
+          {/* Admin-only (Circles + Colosseum surface is hidden from
+              non-admins for now — silently redirected to home). */}
+          <Route
+            path="/circles"
+            element={
+              <AdminOnlyRoute>
+                <CirclesPage />
+              </AdminOnlyRoute>
+            }
+          />
+          <Route
+            path="/pricing"
+            element={
+              <AdminOnlyRoute>
+                <PricingPage />
+              </AdminOnlyRoute>
+            }
+          />
+          <Route
+            path="/pricing/cancel"
+            element={
+              <AdminOnlyRoute>
+                <PricingCancelPage />
+              </AdminOnlyRoute>
+            }
+          />
           <Route
             path="/pricing/success"
             element={
-              <ProtectedRoute>
+              <AdminOnlyRoute>
                 <PricingSuccessPage />
-              </ProtectedRoute>
+              </AdminOnlyRoute>
             }
           />
-          <Route path="/terms" element={<TermsPage />} />
-          <Route path="/how-to-play" element={<HowToPlayPage />} />
+          {/* /colosseum is not a real route — it's the product name. Any
+              typed or bookmarked URL forwards to the canonical /party,
+              which is itself admin-gated below. */}
+          <Route path="/colosseum" element={<Navigate to="/party" replace />} />
 
           {/* Protected */}
           <Route
@@ -121,21 +150,21 @@ export default function App() {
           <Route
             path="/circles/manage"
             element={
-              <ProtectedRoute>
+              <AdminOnlyRoute>
                 <CirclesManageGuard>
                   <CirclesManagePage />
                 </CirclesManageGuard>
-              </ProtectedRoute>
+              </AdminOnlyRoute>
             }
           />
           <Route
             path="/circles/manage/:circleId"
             element={
-              <ProtectedRoute>
+              <AdminOnlyRoute>
                 <CirclesManageGuard>
                   <CirclesManagePage />
                 </CirclesManageGuard>
-              </ProtectedRoute>
+              </AdminOnlyRoute>
             }
           />
           <Route
@@ -149,9 +178,9 @@ export default function App() {
           <Route
             path="/party"
             element={
-              <ProtectedRoute>
+              <AdminOnlyRoute>
                 <PartyPage />
-              </ProtectedRoute>
+              </AdminOnlyRoute>
             }
           />
 

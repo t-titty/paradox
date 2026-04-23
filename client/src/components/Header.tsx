@@ -22,6 +22,9 @@ export function Header() {
           >
             Paradox.
           </Link>
+          <span className="rounded-sm bg-blood px-[6px] py-[2px] font-mono text-[10px] font-bold uppercase tracking-brutal text-bone">
+            BETA
+          </span>
           {testMode && (
             <span className="border border-gold px-2 py-[2px] font-mono text-[10px] uppercase tracking-brutal text-gold">
               TEST MODE

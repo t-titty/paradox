@@ -762,6 +762,11 @@ function LateVowGrantsPanel() {
         </p>
       </div>
 
+      <GlobalLateVowGrantPanel
+        paradoxDate={paradoxDate}
+        onDateChange={setParadoxDate}
+      />
+
       <form
         onSubmit={onGrant}
         className="flex flex-col gap-3 border-2 border-bone p-4 md:flex-row md:items-end"
@@ -845,6 +850,166 @@ function LateVowGrantsPanel() {
           </table>
         </div>
       )}
+    </section>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// GLOBAL LATE VOW GRANT — opens the vow window to every user on one paradox.
+// ─────────────────────────────────────────────────────────────────────────
+
+interface GlobalLateVowStatus {
+  paradoxDate: string;
+  paradox: { id: string; title: string; airDate: string | null } | null;
+  active: {
+    id: string;
+    createdAt: string;
+    revokedAt: string | null;
+    isActive: boolean;
+    grantedBy: { id: string; username: string } | null;
+  } | null;
+}
+
+function GlobalLateVowGrantPanel({
+  paradoxDate,
+  onDateChange,
+}: {
+  paradoxDate: string;
+  onDateChange: (d: string) => void;
+}) {
+  const [status, setStatus] = useState<GlobalLateVowStatus | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(
+    async (date: string) => {
+      try {
+        const { data } = await api.get<GlobalLateVowStatus>(
+          "/admin/global-late-vow-grants",
+          { params: { paradoxDate: date } },
+        );
+        setStatus(data);
+        setErr(null);
+      } catch (e) {
+        setErr(errorMessage(e, "Could not load global grant status."));
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    load(paradoxDate);
+  }, [paradoxDate, load]);
+
+  async function onEnable() {
+    setErr(null);
+    setBusy(true);
+    try {
+      await api.post("/admin/global-late-vow-grants", { paradoxDate });
+      await load(paradoxDate);
+    } catch (e) {
+      setErr(errorMessage(e, "Could not enable global grant."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onRevoke() {
+    if (!status?.active) return;
+    if (
+      !confirm(
+        `Revoke global late vow for ${status.paradox?.title ?? paradoxDate}? All users will immediately lose late-vow access for this paradox.`,
+      )
+    )
+      return;
+    setErr(null);
+    setBusy(true);
+    try {
+      await api.delete(`/admin/global-late-vow-grants/${status.active.id}`);
+      await load(paradoxDate);
+    } catch (e) {
+      setErr(errorMessage(e, "Could not revoke global grant."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const active = Boolean(status?.active);
+
+  return (
+    <section
+      className={`flex flex-col gap-3 border-2 p-4 ${active ? "border-gold" : "border-bone"}`}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="brutal-heading text-sm text-gold">
+            GRANT ALL USERS LATE VOW
+          </p>
+          <p className="mt-1 font-mono text-xs text-muted">
+            Opens the vow window to every user (including ones who register
+            after the grant is created) on the selected paradox date. Does
+            not burn on use — stays active until revoked.
+          </p>
+        </div>
+        <div
+          className={`border-2 px-3 py-2 font-mono text-xs uppercase tracking-brutal ${
+            active ? "border-gold text-gold" : "border-smoke text-muted"
+          }`}
+        >
+          {active
+            ? `GLOBAL LATE VOW: ACTIVE FOR ${status?.paradox?.airDate ?? paradoxDate}`
+            : "GLOBAL LATE VOW: INACTIVE"}
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="flex flex-col gap-1 md:w-56">
+          <span className="brutal-heading text-xs text-muted">PARADOX DATE</span>
+          <input
+            className="brutal-input"
+            type="date"
+            value={paradoxDate}
+            onChange={(e) => onDateChange(e.target.value)}
+          />
+        </label>
+        {active ? (
+          <button
+            type="button"
+            className="brutal-btn brutal-btn-blood"
+            disabled={busy}
+            onClick={onRevoke}
+          >
+            {busy ? "..." : "REVOKE GLOBAL GRANT"}
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="brutal-btn brutal-btn-gold"
+            disabled={busy || !status?.paradox}
+            onClick={onEnable}
+          >
+            {busy ? "..." : "GRANT ALL USERS LATE VOW"}
+          </button>
+        )}
+      </div>
+
+      {!status?.paradox && (
+        <p className="font-mono text-xs text-muted">
+          No paradox scheduled for {paradoxDate}.
+        </p>
+      )}
+
+      {status?.active && (
+        <p className="font-mono text-xs text-muted">
+          Activated {new Date(status.active.createdAt).toLocaleString()} by{" "}
+          <span className="text-bone">
+            {status.active.grantedBy?.username ?? "—"}
+          </span>
+          .
+        </p>
+      )}
+
+      {err && <ErrorBox>{err}</ErrorBox>}
     </section>
   );
 }

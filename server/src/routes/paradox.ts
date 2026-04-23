@@ -65,7 +65,7 @@ paradoxRouter.get("/today", requireAuth, async (req, res, next) => {
       );
     }
 
-    const [vote, lateVowGrant] = await Promise.all([
+    const [vote, lateVowGrant, globalLateVow] = await Promise.all([
       prisma.vote.findUnique({
         where: { userId_paradoxId: { userId, paradoxId: paradox.id } },
         select: { choice: true, justification: true, tribeAssigned: true, createdAt: true },
@@ -73,6 +73,10 @@ paradoxRouter.get("/today", requireAuth, async (req, res, next) => {
       prisma.lateVowGrant.findUnique({
         where: { userId_paradoxId: { userId, paradoxId: paradox.id } },
         select: { id: true, createdAt: true, usedAt: true },
+      }),
+      prisma.globalLateVowGrant.findFirst({
+        where: { paradoxId: paradox.id, isActive: true },
+        select: { id: true, createdAt: true },
       }),
     ]);
 
@@ -90,6 +94,7 @@ paradoxRouter.get("/today", requireAuth, async (req, res, next) => {
       hasVoted: vote !== null,
       vote: vote ?? null,
       lateVowGrant: unusedGrant,
+      globalLateVowActive: globalLateVow !== null,
     });
   } catch (e) {
     next(e);

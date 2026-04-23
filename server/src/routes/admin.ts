@@ -545,3 +545,147 @@ adminRouter.delete("/late-vow-grants/:id", async (req, res, next) => {
     next(e);
   }
 });
+
+// ──────────────────────────────────────────────────────────────────────────
+// Global Late-Vow Grants — opens the vow window to every user on one paradox.
+// ──────────────────────────────────────────────────────────────────────────
+
+const globalLateVowGrantSchema = z.object({
+  paradoxDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+
+/**
+ * GET /api/admin/global-late-vow-grants?paradoxDate=YYYY-MM-DD
+ * Returns the active grant for the given paradox (or the most recent one)
+ * so the panel can render a live ACTIVE/INACTIVE status. When `paradoxDate`
+ * is omitted, defaults to the server's today.
+ */
+adminRouter.get("/global-late-vow-grants", async (req, res, next) => {
+  try {
+    const paradoxDate =
+      typeof req.query.paradoxDate === "string"
+        ? req.query.paradoxDate
+        : ymd(new Date());
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(paradoxDate)) {
+      throw new HttpError(400, "Invalid paradoxDate", "bad_request");
+    }
+    const airDate = parseYmd(paradoxDate);
+    const paradox = await prisma.paradox.findUnique({
+      where: { airDate },
+      select: { id: true, title: true, airDate: true },
+    });
+    if (!paradox) {
+      res.json({
+        paradoxDate,
+        paradox: null,
+        active: null,
+      });
+      return;
+    }
+    const active = await prisma.globalLateVowGrant.findFirst({
+      where: { paradoxId: paradox.id, isActive: true },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        createdAt: true,
+        revokedAt: true,
+        isActive: true,
+        grantedByAdmin: { select: { id: true, username: true } },
+      },
+    });
+    res.json({
+      paradoxDate,
+      paradox: {
+        id: paradox.id,
+        title: paradox.title,
+        airDate: paradox.airDate ? ymd(paradox.airDate) : null,
+      },
+      active: active
+        ? {
+            id: active.id,
+            createdAt: active.createdAt,
+            revokedAt: active.revokedAt,
+            isActive: active.isActive,
+            grantedBy: active.grantedByAdmin,
+          }
+        : null,
+    });
+  } catch (e) {
+    next(e);
+  }
+});
+
+/**
+ * POST /api/admin/global-late-vow-grants
+ * Create a global grant for the given paradox date. Idempotent at the
+ * "currently active" level — if one is already active we return it
+ * instead of inserting a duplicate. If none is active, a new row is
+ * minted (preserving prior grant/revoke history).
+ */
+adminRouter.post("/global-late-vow-grants", async (req, res, next) => {
+  try {
+    const actingAdminId = (req as AuthedRequest).userId;
+    const { paradoxDate } = globalLateVowGrantSchema.parse(req.body);
+    const airDate = parseYmd(paradoxDate);
+    const paradox = await prisma.paradox.findUnique({
+      where: { airDate },
+      select: { id: true, title: true, airDate: true },
+    });
+    if (!paradox) {
+      throw new HttpError(
+        404,
+        `No paradox scheduled for ${paradoxDate}.`,
+        "paradox_not_found",
+      );
+    }
+    const existing = await prisma.globalLateVowGrant.findFirst({
+      where: { paradoxId: paradox.id, isActive: true },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, createdAt: true, revokedAt: true, isActive: true },
+    });
+    const grant =
+      existing ??
+      (await prisma.globalLateVowGrant.create({
+        data: {
+          paradoxId: paradox.id,
+          grantedByAdminId: actingAdminId,
+        },
+        select: { id: true, createdAt: true, revokedAt: true, isActive: true },
+      }));
+    res.status(existing ? 200 : 201).json({
+      grant: {
+        ...grant,
+        paradox: {
+          id: paradox.id,
+          title: paradox.title,
+          airDate: paradox.airDate ? ymd(paradox.airDate) : null,
+        },
+      },
+    });
+  } catch (e) {
+    next(e);
+  }
+});
+
+/**
+ * DELETE /api/admin/global-late-vow-grants/:id
+ * Revoke a global grant — flip `isActive` off and stamp `revokedAt`.
+ * Soft delete so the audit trail stays intact.
+ */
+adminRouter.delete("/global-late-vow-grants/:id", async (req, res, next) => {
+  try {
+    const id = req.params.id!;
+    const existing = await prisma.globalLateVowGrant.findUnique({
+      where: { id },
+      select: { id: true, isActive: true },
+    });
+    if (!existing) throw new HttpError(404, "Grant not found", "not_found");
+    await prisma.globalLateVowGrant.update({
+      where: { id },
+      data: { isActive: false, revokedAt: new Date() },
+    });
+    res.status(204).end();
+  } catch (e) {
+    next(e);
+  }
+});

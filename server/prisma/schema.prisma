@@ -117,6 +117,8 @@ model User {
   // The `@relation` names keep both sides of the back-ref unambiguous.
   lateVowGrants       LateVowGrant[] @relation("LateVowGrantUser")
   lateVowGrantsIssued LateVowGrant[] @relation("LateVowGrantAdmin")
+  // Global late-vow grants issued by this admin (audit back-ref).
+  globalLateVowGrantsIssued GlobalLateVowGrant[] @relation("GlobalLateVowGrantAdmin")
 }
 
 // Admin-issued exemption that lets one user cast a vote on one paradox
@@ -142,6 +144,28 @@ model LateVowGrant {
 
   @@unique([userId, paradoxId])
   @@index([paradoxId])
+  @@index([grantedByAdminId])
+}
+
+// Admin-issued exemption that opens the vow window for **every** user on
+// one paradox. Unlike LateVowGrant (per-user, one-shot), a global grant
+// is consulted on every vote during its lifetime — it does not burn on
+// use. `isActive` is the operative flag; `revokedAt` timestamps when an
+// admin turned it off. Multiple rows per paradox are allowed (so the
+// history of grant/revoke cycles is preserved); the vote route checks for
+// ANY row with `isActive = true` for today's paradox.
+model GlobalLateVowGrant {
+  id                String    @id @default(cuid())
+  paradoxId         String
+  grantedByAdminId  String?
+  createdAt         DateTime  @default(now())
+  revokedAt         DateTime?
+  isActive          Boolean   @default(true)
+
+  paradox        Paradox @relation(fields: [paradoxId], references: [id], onDelete: Cascade)
+  grantedByAdmin User?   @relation("GlobalLateVowGrantAdmin", fields: [grantedByAdminId], references: [id], onDelete: SetNull)
+
+  @@index([paradoxId, isActive])
   @@index([grantedByAdminId])
 }
 
@@ -216,6 +240,7 @@ model Paradox {
   tribeHistory     TribeHistory[]
   throwbackRevotes ThrowbackRevote[]
   lateVowGrants    LateVowGrant[]
+  globalLateVowGrants GlobalLateVowGrant[]
 
   @@index([submittedById])
 }

@@ -65,6 +65,10 @@ export interface DailyTodayResponse {
    *  regardless of phase. Present only when the grant exists and is
    *  unused; null otherwise. Drives the gold banner on the Today page. */
   lateVowGrant: { id: string; createdAt: string } | null;
+  /** True iff an admin has opened the vow window for **every** user on
+   *  today's paradox via GlobalLateVowGrant. Drives the global gold
+   *  banner shown to all non-voters. */
+  globalLateVowActive: boolean;
 }
 
 export interface ThrowbackTodayResponse {

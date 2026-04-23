@@ -20,8 +20,10 @@ import { submissionsRouter } from "./routes/submissions.js";
 import { adminRouter } from "./routes/admin.js";
 import { stripeRouter } from "./routes/stripe.js";
 import { stripeWebhookRouter } from "./routes/stripeWebhook.js";
+import { notificationsRouter } from "./routes/notifications.js";
 import { errorHandler } from "./middleware/error.js";
 import { createSocketServer } from "./sockets/index.js";
+import { startNotificationScheduler } from "./lib/notificationScheduler.js";
 
 const app = express();
 
@@ -51,6 +53,7 @@ app.use("/api/stripe", stripeRouter);
 app.use("/api/feedback", feedbackRouter);
 app.use("/api/submissions", submissionsRouter);
 app.use("/api/admin", adminRouter);
+app.use("/api/notifications", notificationsRouter);
 
 // In production, serve the built client from the same origin. The client
 // is built to client/dist; at runtime this file is server/dist/index.js,
@@ -73,6 +76,9 @@ createSocketServer(httpServer);
 
 httpServer.listen(env.PORT, () => {
   console.log(`[paradox] listening on :${env.PORT} (${env.NODE_ENV})`);
+  // Kick off the phase-kickoff push scheduler. It self-disables when
+  // VAPID isn't configured so dev without keys still boots cleanly.
+  startNotificationScheduler();
 });
 
 async function shutdown(signal: string) {

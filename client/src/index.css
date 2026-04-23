@@ -94,3 +94,38 @@
 .paradox-timer-flash {
   animation: paradox-timer-flash 1.5s infinite;
 }
+
+/* Countdown colon pulse: smooth fade between full and 40% opacity every
+   500ms (so the cycle is 1s) under normal state, twice as fast when the
+   timer is in the red warning window. Colons are their own <span> so the
+   digits don't pulse with them. */
+@keyframes paradox-colon-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.4; }
+}
+.paradox-colon-pulse {
+  animation: paradox-colon-pulse 1s ease-in-out infinite;
+}
+.paradox-colon-pulse-fast {
+  animation: paradox-colon-pulse 0.4s ease-in-out infinite;
+}
+
+/* Gold glow on the fullscreen digits: a soft dual-layer text-shadow so
+   the numbers look slightly luminous without softening the edges. When
+   warning is active we swap to a red glow via .paradox-timer-glow-red. */
+.paradox-timer-glow {
+  text-shadow:
+    0 0 18px rgba(255, 215, 0, 0.45),
+    0 0 40px rgba(255, 215, 0, 0.2);
+}
+.paradox-timer-glow-red {
+  text-shadow:
+    0 0 18px rgba(255, 45, 32, 0.55),
+    0 0 40px rgba(255, 45, 32, 0.25);
+}
+
+/* Subtle red border on the fullscreen timer block during the warning
+   window. `inset` + low alpha keeps it a hint, not a hard frame. */
+.paradox-timer-warning-ring {
+  box-shadow: inset 0 0 0 1px rgba(255, 45, 32, 0.4);
+}

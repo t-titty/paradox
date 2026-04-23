@@ -4,6 +4,7 @@ import { Header } from "./components/Header.tsx";
 import { TestModeBanner } from "./components/TestModeBanner.tsx";
 import { ProtectedRoute } from "./components/ProtectedRoute.tsx";
 import { CirclesManageGuard } from "./components/CirclesManageGuard.tsx";
+import { NotificationPrompt } from "./components/NotificationPrompt.tsx";
 import { LoginPage } from "./pages/LoginPage.tsx";
 import { RegisterPage } from "./pages/RegisterPage.tsx";
 import { ForgotPasswordPage } from "./pages/ForgotPasswordPage.tsx";
@@ -166,6 +167,7 @@ export default function App() {
           © 2026 PARADOX. All rights reserved.
         </p>
       </footer>
+      <NotificationPrompt />
     </div>
   );
 }

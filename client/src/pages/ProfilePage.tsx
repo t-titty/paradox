@@ -5,6 +5,13 @@ import { useAuth } from "../context/AuthContext.tsx";
 import { Constellation } from "../components/Constellation.tsx";
 import { TribeBarChart } from "../components/TribeBarChart.tsx";
 import { FlashbackCard } from "../components/FlashbackCard.tsx";
+import {
+  currentPermission,
+  disablePush,
+  enablePush,
+  isSubscribed,
+  pushSupported,
+} from "../lib/push.ts";
 import type { Choice, Tribe } from "../lib/types.ts";
 
 interface ProfileData {
@@ -205,6 +212,8 @@ export function ProfilePage() {
         </section>
       )}
 
+      {isSelf && <NotificationsSection />}
+
       {isSelf && (
         <SecuritySection
           twoFactorEnabled={Boolean(me?.twoFactorEnabled)}
@@ -212,6 +221,139 @@ export function ProfilePage() {
         />
       )}
     </div>
+  );
+}
+
+function NotificationsSection() {
+  const [permission, setPermission] = useState<
+    NotificationPermission | "unsupported" | "loading"
+  >("loading");
+  const [subscribed, setSubscribed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function refresh() {
+    const perm = currentPermission();
+    setPermission(perm);
+    if (perm === "granted") {
+      setSubscribed(await isSubscribed());
+    } else {
+      setSubscribed(false);
+    }
+  }
+
+  useEffect(() => {
+    refresh();
+  }, []);
+
+  async function onEnable() {
+    setBusy(true);
+    setError(null);
+    try {
+      const sub = await enablePush();
+      if (!sub) {
+        setError(
+          "Browser declined the permission, or notifications aren't configured on this deploy.",
+        );
+      }
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not enable notifications.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onDisable() {
+    setBusy(true);
+    setError(null);
+    try {
+      await disablePush();
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not disable notifications.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const unsupported = permission === "unsupported";
+  const blocked = permission === "denied";
+  const enabled = permission === "granted" && subscribed;
+
+  const status = unsupported
+    ? "UNSUPPORTED"
+    : blocked
+      ? "BLOCKED"
+      : enabled
+        ? "ON"
+        : "OFF";
+
+  return (
+    <section className="flex flex-col gap-4">
+      <h2 className="brutal-heading text-sm text-muted">NOTIFICATIONS</h2>
+      <div className="border-2 border-bone p-5 md:p-6">
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b-2 border-smoke pb-4">
+          <div>
+            <p className="brutal-heading text-xl text-bone md:text-2xl">
+              WEB PUSH
+            </p>
+            <p className="mt-2 font-mono text-sm text-muted">
+              Drop at 8 AM · Vow closes at noon · Duel begins at 8 PM.
+            </p>
+          </div>
+          <span
+            className={`border-2 px-3 py-1 font-mono text-xs uppercase tracking-brutal ${
+              enabled ? "border-gold text-gold" : "border-smoke text-muted"
+            }`}
+          >
+            {status}
+          </span>
+        </div>
+        <div className="mt-5">
+          {unsupported && (
+            <p className="font-mono text-sm text-muted">
+              This browser doesn't support Web Push. Try a recent Chrome,
+              Firefox, or Edge.
+            </p>
+          )}
+          {blocked && (
+            <p className="font-mono text-sm text-blood">
+              Notifications are blocked at the browser level. Re-enable them
+              in your site permissions, then reload.
+            </p>
+          )}
+          {!unsupported && !blocked && (
+            <div className="flex flex-wrap gap-3">
+              {enabled ? (
+                <button
+                  type="button"
+                  onClick={onDisable}
+                  disabled={busy}
+                  className="brutal-btn brutal-btn-blood"
+                >
+                  {busy ? "..." : "DISABLE NOTIFICATIONS"}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={onEnable}
+                  disabled={busy || !pushSupported()}
+                  className="brutal-btn brutal-btn-gold"
+                >
+                  {busy ? "..." : "ENABLE NOTIFICATIONS"}
+                </button>
+              )}
+            </div>
+          )}
+          {error && (
+            <p className="mt-3 border-2 border-blood p-3 font-mono text-sm text-blood">
+              {error}
+            </p>
+          )}
+        </div>
+      </div>
+    </section>
   );
 }
 

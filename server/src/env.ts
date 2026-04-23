@@ -55,6 +55,19 @@ const schema = z.object({
     .optional()
     .transform((v) => (v && v.length > 0 ? v : undefined)),
   EMAIL_FROM: z.string().default("PARADOX <onboarding@resend.dev>"),
+  // Web Push VAPID keys. Generate with `npx web-push generate-vapid-keys`
+  // and set all three on Railway. Optional in dev so the server still
+  // boots without them — the /api/notifications/* routes return 503 and
+  // the notification scheduler stays idle when they're absent.
+  VAPID_PUBLIC_KEY: z
+    .string()
+    .optional()
+    .transform((v) => (v && v.length > 0 ? v : undefined)),
+  VAPID_PRIVATE_KEY: z
+    .string()
+    .optional()
+    .transform((v) => (v && v.length > 0 ? v : undefined)),
+  VAPID_SUBJECT: z.string().default("mailto:ops@paradox.app"),
 });
 
 const parsed = schema.safeParse(process.env);

@@ -104,30 +104,72 @@ export function CountdownTimer() {
   const millis = remainingMs % 1000;
 
   if (window.variant === "fullscreen") {
+    // Colons pulse continuously (slow normally, faster when warning).
+    // Glow swaps from gold → red in the warning window, and a subtle
+    // red inset ring wraps the whole block.
+    const glowClass = warning
+      ? "paradox-timer-glow-red"
+      : "paradox-timer-glow";
+    const colonPulseClass = warning
+      ? "paradox-colon-pulse-fast"
+      : "paradox-colon-pulse";
+    const ringClass = warning ? "paradox-timer-warning-ring" : "";
+
     return (
-      <div className="flex flex-1 flex-col items-center justify-center px-4 py-10 md:py-16">
-        <p className="brutal-heading text-sm text-muted md:text-base">
+      <div
+        className={`flex flex-1 flex-col items-center justify-center px-4 py-10 md:py-16 ${ringClass}`}
+      >
+        <p
+          className="brutal-heading text-[18px] uppercase text-muted md:text-[22px]"
+          style={{ letterSpacing: "0.35em" }}
+        >
           {window.label}
         </p>
 
-        {/* Dramatic rule above the digits. */}
-        <div className="mt-6 h-[2px] w-full max-w-4xl bg-bone" />
+        {/* Thin gold rule above the digits. */}
+        <div className="mt-6 h-px w-full max-w-4xl bg-gold" />
 
         <div
-          className={`mt-8 flex items-baseline justify-center gap-1 font-mono font-bold tabular-nums md:mt-10 md:gap-2 ${colorClass} ${flashClass}`}
+          className={`mt-8 flex items-baseline justify-center font-mono font-bold tabular-nums md:mt-10 ${colorClass} ${flashClass} ${glowClass}`}
+          style={{ letterSpacing: "0.08em" }}
         >
-          <span className="text-[80px] leading-none md:text-[140px] lg:text-[180px]">
-            {pad2(hours)}:{pad2(minutes)}:{pad2(seconds)}
+          <span className="text-[72px] leading-none md:text-[120px] lg:text-[160px] xl:text-[200px]">
+            {pad2(hours)}
           </span>
-          <span className="text-[40px] leading-none md:text-[70px] lg:text-[90px]">
-            :{pad3(millis)}
+          <span
+            className={`${colonPulseClass} text-[72px] leading-none md:text-[120px] lg:text-[160px] xl:text-[200px]`}
+          >
+            :
+          </span>
+          <span className="text-[72px] leading-none md:text-[120px] lg:text-[160px] xl:text-[200px]">
+            {pad2(minutes)}
+          </span>
+          <span
+            className={`${colonPulseClass} text-[72px] leading-none md:text-[120px] lg:text-[160px] xl:text-[200px]`}
+          >
+            :
+          </span>
+          <span className="text-[72px] leading-none md:text-[120px] lg:text-[160px] xl:text-[200px]">
+            {pad2(seconds)}
+          </span>
+          <span
+            className={`${colonPulseClass} text-[36px] leading-none md:text-[60px] lg:text-[80px] xl:text-[100px]`}
+          >
+            :
+          </span>
+          <span className="text-[36px] leading-none md:text-[60px] lg:text-[80px] xl:text-[100px]">
+            {pad3(millis)}
           </span>
         </div>
 
-        <div className="mt-8 h-[2px] w-full max-w-4xl bg-bone md:mt-10" />
+        {/* Thin gold rule below the digits. */}
+        <div className="mt-8 h-px w-full max-w-4xl bg-gold md:mt-10" />
 
         {warning && (
-          <p className="brutal-heading mt-6 animate-pulse text-sm text-blood md:text-base">
+          <p
+            className={`brutal-heading mt-6 text-xl text-blood md:text-3xl ${flashClass}`}
+            style={{ letterSpacing: "0.35em" }}
+          >
             TIME IS RUNNING OUT.
           </p>
         )}

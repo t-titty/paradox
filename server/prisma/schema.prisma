@@ -111,6 +111,26 @@ model User {
   inviteCodesCreated CircleInviteCode[] @relation("InviteCreator")
 
   passwordResetTokens PasswordResetToken[]
+  pushSubscriptions   PushSubscription[]
+}
+
+// Web Push (browser Push API) subscriptions. One row per browser-device
+// that has opted in. `endpoint` is the push service URL returned by the
+// browser — unique per subscription, so it doubles as the dedupe key.
+// `p256dh` and `auth` are the VAPID encryption keys; both are required
+// for sendNotification. Stale subscriptions (410 from the push service)
+// are pruned by the notification scheduler on send failure.
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 // Generic key/value table for operator-togglable runtime settings. Today

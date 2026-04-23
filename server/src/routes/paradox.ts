@@ -65,10 +65,23 @@ paradoxRouter.get("/today", requireAuth, async (req, res, next) => {
       );
     }
 
-    const vote = await prisma.vote.findUnique({
-      where: { userId_paradoxId: { userId, paradoxId: paradox.id } },
-      select: { choice: true, justification: true, tribeAssigned: true, createdAt: true },
-    });
+    const [vote, lateVowGrant] = await Promise.all([
+      prisma.vote.findUnique({
+        where: { userId_paradoxId: { userId, paradoxId: paradox.id } },
+        select: { choice: true, justification: true, tribeAssigned: true, createdAt: true },
+      }),
+      prisma.lateVowGrant.findUnique({
+        where: { userId_paradoxId: { userId, paradoxId: paradox.id } },
+        select: { id: true, createdAt: true, usedAt: true },
+      }),
+    ]);
+
+    // Surface only unused grants to the client — once burned the banner
+    // has nothing useful to say and shouldn't nudge the user again.
+    const unusedGrant =
+      lateVowGrant && !lateVowGrant.usedAt
+        ? { id: lateVowGrant.id, createdAt: lateVowGrant.createdAt }
+        : null;
 
     res.json({
       mode: "daily",
@@ -76,6 +89,7 @@ paradoxRouter.get("/today", requireAuth, async (req, res, next) => {
       phase,
       hasVoted: vote !== null,
       vote: vote ?? null,
+      lateVowGrant: unusedGrant,
     });
   } catch (e) {
     next(e);

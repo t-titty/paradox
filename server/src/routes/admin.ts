@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../db.js";
-import { requireAdmin } from "../middleware/auth.js";
+import { requireAdmin, type AuthedRequest } from "../middleware/auth.js";
 import { HttpError } from "../middleware/error.js";
 import { parseYmd, ymd } from "../phases.js";
 import {
@@ -402,6 +402,145 @@ adminRouter.post("/settings", async (req, res, next) => {
       select: { key: true, value: true, updatedAt: true },
     });
     res.json({ setting });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// Late-Vow Grants
+// ──────────────────────────────────────────────────────────────────────────
+
+const lateVowGrantSchema = z.object({
+  username: z.string().min(1).max(80),
+  // YYYY-MM-DD — the airDate of the paradox to grant access to. Defaults
+  // to today on the client; server still validates the format.
+  paradoxDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+
+/**
+ * POST /api/admin/late-vow-grants
+ * Create (or re-affirm) a late-vow exemption for one user on one paradox.
+ * Idempotent on (userId, paradoxId) via upsert — clicking "grant" twice
+ * produces one row. The acting admin is recorded for audit.
+ */
+adminRouter.post("/late-vow-grants", async (req, res, next) => {
+  try {
+    const actingAdminId = (req as AuthedRequest).userId;
+    const { username, paradoxDate } = lateVowGrantSchema.parse(req.body);
+
+    const user = await prisma.user.findUnique({
+      where: { username },
+      select: { id: true, username: true },
+    });
+    if (!user) throw new HttpError(404, "User not found", "user_not_found");
+
+    const airDate = parseYmd(paradoxDate);
+    const paradox = await prisma.paradox.findUnique({
+      where: { airDate },
+      select: { id: true, title: true, airDate: true },
+    });
+    if (!paradox) {
+      throw new HttpError(
+        404,
+        `No paradox scheduled for ${paradoxDate}.`,
+        "paradox_not_found",
+      );
+    }
+
+    const grant = await prisma.lateVowGrant.upsert({
+      where: {
+        userId_paradoxId: { userId: user.id, paradoxId: paradox.id },
+      },
+      create: {
+        userId: user.id,
+        paradoxId: paradox.id,
+        grantedByAdminId: actingAdminId,
+      },
+      // Preserve createdAt / grantedByAdminId on re-grant; `usedAt` is
+      // intentionally left alone so re-granting a burned grant doesn't
+      // unburn it (the admin should delete + recreate to reset).
+      update: {},
+      select: {
+        id: true,
+        userId: true,
+        paradoxId: true,
+        grantedByAdminId: true,
+        createdAt: true,
+        usedAt: true,
+      },
+    });
+
+    res.status(201).json({
+      grant: {
+        ...grant,
+        user: { id: user.id, username: user.username },
+        paradox: {
+          id: paradox.id,
+          title: paradox.title,
+          airDate: ymd(paradox.airDate!),
+        },
+      },
+    });
+  } catch (e) {
+    next(e);
+  }
+});
+
+/**
+ * GET /api/admin/late-vow-grants
+ * List active (unused) grants. Used + expired grants are hidden so the
+ * panel stays readable; they can be surfaced on a "history" view later.
+ */
+adminRouter.get("/late-vow-grants", async (_req, res, next) => {
+  try {
+    const grants = await prisma.lateVowGrant.findMany({
+      where: { usedAt: null },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        createdAt: true,
+        usedAt: true,
+        user: { select: { id: true, username: true } },
+        paradox: { select: { id: true, title: true, airDate: true } },
+        grantedByAdmin: { select: { id: true, username: true } },
+      },
+    });
+    res.json({
+      grants: grants.map((g) => ({
+        id: g.id,
+        createdAt: g.createdAt,
+        usedAt: g.usedAt,
+        user: g.user,
+        paradox: {
+          id: g.paradox.id,
+          title: g.paradox.title,
+          airDate: g.paradox.airDate ? ymd(g.paradox.airDate) : null,
+        },
+        grantedBy: g.grantedByAdmin,
+      })),
+    });
+  } catch (e) {
+    next(e);
+  }
+});
+
+/**
+ * DELETE /api/admin/late-vow-grants/:id
+ * Revoke a grant. Hard delete — if the grant was already used, deleting
+ * it doesn't undo the vote; it just removes the record from the active
+ * list.
+ */
+adminRouter.delete("/late-vow-grants/:id", async (req, res, next) => {
+  try {
+    const id = req.params.id!;
+    const existing = await prisma.lateVowGrant.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+    if (!existing) throw new HttpError(404, "Grant not found", "not_found");
+    await prisma.lateVowGrant.delete({ where: { id } });
+    res.status(204).end();
   } catch (e) {
     next(e);
   }

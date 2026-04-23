@@ -61,6 +61,10 @@ export interface DailyTodayResponse {
     tribeAssigned: Tribe | null;
     createdAt: string;
   } | null;
+  /** Admin-issued exemption letting this user vote on today's paradox
+   *  regardless of phase. Present only when the grant exists and is
+   *  unused; null otherwise. Drives the gold banner on the Today page. */
+  lateVowGrant: { id: string; createdAt: string } | null;
 }
 
 export interface ThrowbackTodayResponse {

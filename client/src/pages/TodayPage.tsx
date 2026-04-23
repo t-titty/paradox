@@ -122,7 +122,12 @@ export function TodayPage() {
     );
   }
 
-  const { phase, paradox, hasVoted } = state;
+  const { phase, paradox, hasVoted, lateVowGrant } = state;
+  // An unused late-vow grant lets the user vote even if the vow window
+  // has closed. Show the voting UI (not the default phase content) when
+  // that's the case — otherwise the banner nudges them toward an action
+  // they can't actually take from this page.
+  const canVowLate = Boolean(lateVowGrant) && !hasVoted;
 
   return (
     <div className="flex flex-col">
@@ -133,7 +138,8 @@ export function TodayPage() {
         onPhaseOverride={onPhaseOverride}
       />
       <CountdownTimer />
-      {phase.phase === "vow" && (
+      {canVowLate && <LateVowBanner />}
+      {(phase.phase === "vow" || canVowLate) && (
         <DropVow
           paradox={paradox}
           hasVoted={hasVoted}
@@ -143,15 +149,24 @@ export function TodayPage() {
           onSortNow={() => setPhaseOverride("sort")}
         />
       )}
-      {phase.phase === "sort" && <SortView />}
-      {phase.phase === "duel" && <DuelFlow />}
-      {phase.phase === "drop" && (
+      {!canVowLate && phase.phase === "sort" && <SortView />}
+      {!canVowLate && phase.phase === "duel" && <DuelFlow />}
+      {!canVowLate && phase.phase === "drop" && (
         <Placeholder
           roman="I"
           title="THE DROP"
           body="The paradox has been revealed. Switch to THE VOW to take a side."
         />
       )}
+    </div>
+  );
+}
+
+function LateVowBanner() {
+  return (
+    <div className="border-b-2 border-gold bg-ink px-4 py-3 text-center font-mono text-xs uppercase tracking-brutal text-gold md:px-6 md:text-sm">
+      You have been granted late vow access for today's paradox. Cast your
+      vow before midnight.
     </div>
   );
 }

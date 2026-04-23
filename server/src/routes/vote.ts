@@ -27,9 +27,20 @@ voteRouter.post("/", requireAuth, async (req, res, next) => {
 
     const phase = resolvePhase();
     const testMode = await effectiveTestMode(userId);
-    // Voting only during the vow window. Allow PHASE_OVERRIDE=vow for demos.
-    // System or per-user test mode bypasses the phase gate entirely.
-    if (!testMode && phase.phase !== "vow") {
+
+    // Check for an admin-issued late-vow exemption on this paradox. Pulled
+    // up before the phase gate so the gate can consult it, and reused
+    // below to stamp usedAt atomically with the vote. (Unique on
+    // (userId, paradoxId), so there's at most one row.)
+    const lateVowGrant = await prisma.lateVowGrant.findUnique({
+      where: { userId_paradoxId: { userId, paradoxId } },
+      select: { id: true, usedAt: true },
+    });
+    const hasUnusedGrant = Boolean(lateVowGrant && !lateVowGrant.usedAt);
+
+    // Voting only during the vow window. Test mode and an unused
+    // late-vow grant both bypass the phase gate.
+    if (!testMode && !hasUnusedGrant && phase.phase !== "vow") {
       throw new HttpError(
         403,
         "Voting is closed. The Vow window has passed.",
@@ -70,14 +81,25 @@ voteRouter.post("/", requireAuth, async (req, res, next) => {
       throw new HttpError(409, "You have already vowed today.", "already_voted");
     }
 
-    const vote = await prisma.vote.create({
-      data: {
-        userId,
-        paradoxId,
-        choice,
-        justification: justification.trim(),
-      },
-      select: { id: true, choice: true, justification: true, createdAt: true },
+    // Create the vote and (if applicable) burn the late-vow grant in
+    // one transaction so a grant can never be half-consumed.
+    const vote = await prisma.$transaction(async (tx) => {
+      const created = await tx.vote.create({
+        data: {
+          userId,
+          paradoxId,
+          choice,
+          justification: justification.trim(),
+        },
+        select: { id: true, choice: true, justification: true, createdAt: true },
+      });
+      if (hasUnusedGrant && lateVowGrant) {
+        await tx.lateVowGrant.update({
+          where: { id: lateVowGrant.id },
+          data: { usedAt: new Date() },
+        });
+      }
+      return created;
     });
 
     res.status(201).json({ vote });

@@ -103,7 +103,12 @@ export function AdminPage() {
       {tab === "paradoxes" && <ParadoxesPanel />}
       {tab === "submissions" && <SubmissionsPanel />}
       {tab === "feedback" && <FeedbackPanel />}
-      {tab === "users" && <UsersPanel />}
+      {tab === "users" && (
+        <div className="flex flex-col gap-8">
+          <UsersPanel />
+          <LateVowGrantsPanel />
+        </div>
+      )}
       {tab === "developer" && <DeveloperPanel />}
     </div>
   );
@@ -674,6 +679,173 @@ function Pill({ color, children }: { color: "gold" | "blood"; children: React.Re
     <span className={`border px-1 py-[1px] text-[10px] uppercase tracking-brutal ${cls}`}>
       {children}
     </span>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// LATE VOW GRANTS
+// ─────────────────────────────────────────────────────────────────────────
+
+interface LateVowGrantRow {
+  id: string;
+  createdAt: string;
+  usedAt: string | null;
+  user: { id: string; username: string };
+  paradox: { id: string; title: string; airDate: string | null };
+  grantedBy: { id: string; username: string } | null;
+}
+
+function todayYmd(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function LateVowGrantsPanel() {
+  const [username, setUsername] = useState("");
+  const [paradoxDate, setParadoxDate] = useState(todayYmd());
+  const [grants, setGrants] = useState<LateVowGrantRow[] | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(() => {
+    api
+      .get<{ grants: LateVowGrantRow[] }>("/admin/late-vow-grants")
+      .then((r) => setGrants(r.data.grants))
+      .catch((e) => setErr(errorMessage(e, "Could not load grants.")));
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function onGrant(e: FormEvent) {
+    e.preventDefault();
+    setErr(null);
+    setBusy(true);
+    try {
+      await api.post("/admin/late-vow-grants", {
+        username: username.trim(),
+        paradoxDate,
+      });
+      setUsername("");
+      load();
+    } catch (e) {
+      setErr(errorMessage(e, "Could not grant late vow."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onRevoke(id: string, target: string) {
+    if (!confirm(`Revoke late vow grant for ${target}?`)) return;
+    setErr(null);
+    try {
+      await api.delete(`/admin/late-vow-grants/${id}`);
+      load();
+    } catch (e) {
+      setErr(errorMessage(e, "Revoke failed."));
+    }
+  }
+
+  return (
+    <section className="flex flex-col gap-4">
+      <div>
+        <p className="font-mono text-xs uppercase tracking-brutal text-muted">
+          LATE VOW GRANTS
+        </p>
+        <p className="mt-1 font-mono text-xs text-muted">
+          Lets one user cast a vow on one paradox outside the usual window.
+          Burns itself on use.
+        </p>
+      </div>
+
+      <form
+        onSubmit={onGrant}
+        className="flex flex-col gap-3 border-2 border-bone p-4 md:flex-row md:items-end"
+      >
+        <label className="flex flex-1 flex-col gap-1">
+          <span className="brutal-heading text-xs text-muted">USERNAME</span>
+          <input
+            className="brutal-input"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            placeholder="e.g. jordan_t"
+            required
+            maxLength={80}
+          />
+        </label>
+        <label className="flex flex-col gap-1 md:w-56">
+          <span className="brutal-heading text-xs text-muted">PARADOX DATE</span>
+          <input
+            className="brutal-input"
+            type="date"
+            value={paradoxDate}
+            onChange={(e) => setParadoxDate(e.target.value)}
+            required
+          />
+        </label>
+        <button
+          type="submit"
+          className="brutal-btn brutal-btn-gold"
+          disabled={busy || username.trim().length === 0}
+        >
+          {busy ? "..." : "GRANT LATE VOW"}
+        </button>
+      </form>
+
+      {err && <ErrorBox>{err}</ErrorBox>}
+
+      {!grants ? (
+        <p className="brutal-heading text-muted">LOADING...</p>
+      ) : grants.length === 0 ? (
+        <p className="font-mono text-sm text-muted">No active grants.</p>
+      ) : (
+        <div className="overflow-x-auto border-2 border-bone">
+          <table className="w-full font-mono text-sm">
+            <thead className="border-b-2 border-bone bg-smoke/20">
+              <tr className="text-left uppercase tracking-brutal">
+                <th className="px-3 py-2 text-xs">USER</th>
+                <th className="px-3 py-2 text-xs">PARADOX</th>
+                <th className="px-3 py-2 text-xs">DATE</th>
+                <th className="px-3 py-2 text-xs">GRANTED BY</th>
+                <th className="px-3 py-2 text-xs">GRANTED AT</th>
+                <th className="px-3 py-2 text-xs">ACTION</th>
+              </tr>
+            </thead>
+            <tbody>
+              {grants.map((g) => (
+                <tr key={g.id} className="border-b border-smoke align-top">
+                  <td className="px-3 py-3 text-bone">{g.user.username}</td>
+                  <td className="px-3 py-3 text-bone">
+                    {g.paradox.title}
+                  </td>
+                  <td className="px-3 py-3 text-xs text-muted">
+                    {g.paradox.airDate ?? "—"}
+                  </td>
+                  <td className="px-3 py-3 text-xs text-muted">
+                    {g.grantedBy?.username ?? "—"}
+                  </td>
+                  <td className="px-3 py-3 text-xs text-muted">
+                    {new Date(g.createdAt).toLocaleString()}
+                  </td>
+                  <td className="px-3 py-3">
+                    <button
+                      className="border border-blood px-2 py-1 text-xs uppercase tracking-brutal text-blood hover:bg-blood hover:text-ink"
+                      onClick={() => onRevoke(g.id, g.user.username)}
+                    >
+                      REVOKE
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   );
 }
 

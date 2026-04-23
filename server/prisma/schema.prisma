@@ -112,6 +112,37 @@ model User {
 
   passwordResetTokens PasswordResetToken[]
   pushSubscriptions   PushSubscription[]
+
+  // Late-vow grants this user has received + grants this admin issued.
+  // The `@relation` names keep both sides of the back-ref unambiguous.
+  lateVowGrants       LateVowGrant[] @relation("LateVowGrantUser")
+  lateVowGrantsIssued LateVowGrant[] @relation("LateVowGrantAdmin")
+}
+
+// Admin-issued exemption that lets one user cast a vote on one paradox
+// outside the usual vow window. Checked by POST /api/vote: if the user
+// has an unused grant for the target paradox, the phase gate is bypassed
+// and `usedAt` is stamped atomically with the vote. `(userId, paradoxId)`
+// is unique so re-granting is idempotent — an admin clicking "grant"
+// twice produces one row, and deleting restores the un-granted state.
+// Cascade on user/paradox delete keeps the table clean; the admin
+// back-ref is SetNull so we retain grant history if an admin account
+// is ever removed.
+model LateVowGrant {
+  id                String    @id @default(cuid())
+  userId            String
+  paradoxId         String
+  grantedByAdminId  String?
+  createdAt         DateTime  @default(now())
+  usedAt            DateTime?
+
+  user            User    @relation("LateVowGrantUser", fields: [userId], references: [id], onDelete: Cascade)
+  paradox         Paradox @relation(fields: [paradoxId], references: [id], onDelete: Cascade)
+  grantedByAdmin  User?   @relation("LateVowGrantAdmin", fields: [grantedByAdminId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, paradoxId])
+  @@index([paradoxId])
+  @@index([grantedByAdminId])
 }
 
 // Web Push (browser Push API) subscriptions. One row per browser-device
@@ -184,6 +215,7 @@ model Paradox {
   duels            Duel[]
   tribeHistory     TribeHistory[]
   throwbackRevotes ThrowbackRevote[]
+  lateVowGrants    LateVowGrant[]
 
   @@index([submittedById])
 }

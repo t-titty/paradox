@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { api, errorMessage } from "../../lib/api.ts";
 import { validateJustification } from "../../lib/sentence.ts";
 import type { Choice, DailyTodayResponse, Paradox } from "../../lib/types.ts";
@@ -190,21 +190,45 @@ function ConfirmModal({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  // Lock background scroll while the modal is open so iOS can't rubber-band
+  // the page behind it (which on short viewports pushed the action buttons
+  // off-screen). Restore the prior overflow value on unmount so we don't
+  // clobber any global style.
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/90 p-6">
-      <div className="brutal-card-gold w-full max-w-lg">
-        <p className="brutal-heading text-sm text-gold">ONE LAST LOOK.</p>
-        <h2 className="brutal-heading mt-4 text-3xl text-bone">YOU CANNOT EDIT THIS.</h2>
-        <p className="mt-3 font-mono text-sm text-muted">
-          Once vowed, your justification is locked for today. The Oracle will read it at noon.
-        </p>
-        <div className="mt-6 border border-smoke p-4 font-mono">
-          <p className="text-xs uppercase tracking-brutal text-gold">YOUR CHOICE — {choice}</p>
-          <p className="text-bone">{choiceText}</p>
-          <p className="mt-4 text-xs uppercase tracking-brutal text-gold">YOUR SENTENCE</p>
-          <p className="text-bone">{justification}</p>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/90 p-4"
+      role="dialog"
+      aria-modal="true"
+    >
+      {/* max-h + flex-col so the content region scrolls independently and
+          the action buttons stay pinned to the bottom of the card, even on
+          iPhone SE (375px / short landscape). */}
+      <div className="brutal-card-gold flex max-h-[90vh] w-full max-w-lg flex-col">
+        <div
+          className="min-h-0 flex-1 overflow-y-auto pr-1"
+          style={{ WebkitOverflowScrolling: "touch" }}
+        >
+          <p className="brutal-heading text-sm text-gold">ONE LAST LOOK.</p>
+          <h2 className="brutal-heading mt-4 text-3xl text-bone">YOU CANNOT EDIT THIS.</h2>
+          <p className="mt-3 font-mono text-sm text-muted">
+            Once vowed, your justification is locked for today. The Oracle will read it at noon.
+          </p>
+          <div className="mt-6 border border-smoke p-4 font-mono">
+            <p className="text-xs uppercase tracking-brutal text-gold">YOUR CHOICE — {choice}</p>
+            <p className="text-bone">{choiceText}</p>
+            <p className="mt-4 text-xs uppercase tracking-brutal text-gold">YOUR SENTENCE</p>
+            <p className="text-bone">{justification}</p>
+          </div>
         </div>
-        <div className="mt-6 flex gap-3">
+        <div className="mt-4 flex shrink-0 gap-3 pt-4">
           <button onClick={onCancel} className="brutal-btn flex-1" disabled={submitting}>
             RECONSIDER
           </button>

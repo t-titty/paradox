@@ -5,8 +5,10 @@ import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { HttpError } from "../middleware/error.js";
 import { validateJustification } from "../lib/sentence.js";
 import { containsProfanity } from "../lib/profanity.js";
-import { parseYmd, resolvePhase } from "../phases.js";
+import { lateVowsOpen, parseYmd, resolvePhase } from "../phases.js";
 import { effectiveTestMode } from "../lib/testMode.js";
+import { applyStreakFreezes, computeStreakForUser } from "../lib/streaks.js";
+import { sortVote } from "../lib/sorting.js";
 
 export const voteRouter = Router();
 
@@ -23,9 +25,13 @@ const voteSchema = z.object({
  * Gate precedence (spec'd exactly in this order):
  *   1. Already voted today → reject, regardless of any grants.
  *   2. Current phase is vow → allow.
- *   3. Active GlobalLateVowGrant for today's paradox → allow (does NOT burn).
- *   4. Individual unused LateVowGrant → allow and stamp `usedAt`.
- *   5. Otherwise → phase_locked.
+ *   3. Self-serve late vows (ALLOW_LATE_VOWS, sort/duel phases) → allow, flagged isLate.
+ *   4. Active GlobalLateVowGrant for today's paradox → allow (does NOT burn).
+ *   5. Individual unused LateVowGrant → allow and stamp `usedAt`.
+ *   6. Otherwise → phase_locked.
+ *
+ * After the vote lands: spend streak freezes to bridge any missed days, and
+ * sort late vows immediately (the batch sort has already run for on-time ones).
  */
 voteRouter.post("/", requireAuth, async (req, res, next) => {
   try {
@@ -65,7 +71,8 @@ voteRouter.post("/", requireAuth, async (req, res, next) => {
     //    Look up grants only when the phase is closed — saves a round-trip
     //    on the hot path during the vow window.
     let individualGrant: { id: string; usedAt: Date | null } | null = null;
-    if (!testMode && phase.phase !== "vow") {
+    const isLate = phase.phase !== "vow";
+    if (!testMode && phase.phase !== "vow" && !lateVowsOpen(phase)) {
       const globalActive = await prisma.globalLateVowGrant.findFirst({
         where: { paradoxId: paradox.id, isActive: true },
         select: { id: true },
@@ -110,6 +117,7 @@ voteRouter.post("/", requireAuth, async (req, res, next) => {
           paradoxId,
           choice,
           justification: justification.trim(),
+          isLate,
         },
         select: { id: true, choice: true, justification: true, createdAt: true },
       });
@@ -122,7 +130,21 @@ voteRouter.post("/", requireAuth, async (req, res, next) => {
       return created;
     });
 
-    res.status(201).json({ vote });
+    // Streak bookkeeping never blocks the vote.
+    let frozenDays: string[] = [];
+    try {
+      frozenDays = await applyStreakFreezes(userId, phase.today);
+    } catch (e) {
+      console.warn("[vote] streak freeze failed", e);
+    }
+    const streak = await computeStreakForUser(userId, phase.today).catch(() => null);
+
+    if (isLate) {
+      // Fire-and-forget; the Sort page will await the same in-flight call.
+      sortVote(vote.id).catch((e) => console.warn("[vote] late sort failed", e));
+    }
+
+    res.status(201).json({ vote: { ...vote, isLate }, streak, frozenDays });
   } catch (e) {
     next(e);
   }

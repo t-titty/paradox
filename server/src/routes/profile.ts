@@ -3,6 +3,11 @@ import { prisma } from "../db.js";
 import { HttpError } from "../middleware/error.js";
 import type { Tribe } from "@prisma/client";
 import { TRIBES, type TribeName } from "../lib/oracle.js";
+import { computeConstellation, computeDrift } from "../lib/constellation.js";
+import { badgesFor, titleFor } from "../lib/progression.js";
+import { computeStreakForUser } from "../lib/streaks.js";
+import { resolvePhase } from "../phases.js";
+import { addDaysYmd, weekStartYmd } from "../lib/time.js";
 
 export const profileRouter = Router();
 
@@ -31,9 +36,10 @@ profileRouter.get("/:username", async (req, res, next) => {
         civilityScore: true,
         isPremium: true,
         createdAt: true,
+        isBot: true,
       },
     });
-    if (!user) throw new HttpError(404, "User not found", "not_found");
+    if (!user || user.isBot) throw new HttpError(404, "User not found", "not_found");
 
     const history = await prisma.tribeHistory.findMany({
       where: { userId: user.id },
@@ -65,8 +71,60 @@ profileRouter.get("/:username", async (req, res, next) => {
 
     const constellation = computeConstellation(history.map((h) => h.tribe));
 
+    // Progression: streak, title, badges and this week's Moral Drift.
+    const today = resolvePhase().today;
+    const weekStart = weekStartYmd(today);
+    const baselineStart = addDaysYmd(weekStart, -28);
+    const [streak, votes, pvpDuels, spars, syntheses, goldStars, shiftedThrowbacks] = await Promise.all([
+      computeStreakForUser(user.id, today),
+      prisma.vote.count({ where: { userId: user.id, paradox: { airDate: { not: null } } } }),
+      prisma.duel.count({
+        where: { kind: "pvp", endedAt: { not: null }, OR: [{ userAId: user.id }, { userBId: user.id }] },
+      }),
+      prisma.duel.count({ where: { kind: "spar", userAId: user.id } }),
+      prisma.duel.count({
+        where: { kind: "pvp", bothSigned: true, OR: [{ userAId: user.id }, { userBId: user.id }] },
+      }),
+      prisma.oracleMark.count({ where: { userId: user.id, kind: "gold_star" } }),
+      prisma.throwbackRevote.count({ where: { userId: user.id, shift: "shifted" } }),
+    ]);
+    const thisWeekTribes = history
+      .filter((h) => h.airDate.toISOString().slice(0, 10) >= weekStart)
+      .map((h) => h.tribe);
+    const baselineTribes = history
+      .filter((h) => {
+        const d = h.airDate.toISOString().slice(0, 10);
+        return d >= baselineStart && d < weekStart;
+      })
+      .map((h) => h.tribe);
+    const airedSubmissions = submittedParadoxes.filter(
+      (p) => p.airDate && p.airDate.toISOString().slice(0, 10) <= today,
+    ).length;
+
+    const { isBot: _isBot, ...publicUser } = user;
+    void _isBot;
+
     res.json({
-      user,
+      user: publicUser,
+      streak: { current: streak.current, best: streak.best },
+      title: titleFor(user.wisdomPoints),
+      badges: badgesFor({
+        votes,
+        bestStreak: streak.best,
+        pvpDuels,
+        spars,
+        syntheses,
+        goldStars,
+        shiftedThrowbacks,
+        distinctTribes: Object.values(tribeCounts).filter((n) => n > 0).length,
+        airedSubmissions,
+      }),
+      stats: { votes, pvpDuels, spars, syntheses, goldStars },
+      drift: {
+        weekStart,
+        votesThisWeek: thisWeekTribes.length,
+        ...computeDrift(thisWeekTribes, baselineTribes),
+      },
       history: history.map((h) => ({
         tribe: h.tribe,
         airDate: h.airDate,
@@ -81,66 +139,3 @@ profileRouter.get("/:username", async (req, res, next) => {
   }
 });
 
-/* ──────────────────────────────────────────────────────────────────────── */
-/* Constellation math — pure, deterministic, easy to unit-test later.       */
-/* ──────────────────────────────────────────────────────────────────────── */
-
-/**
- * Each tribe has a canonical 3D position in philosophical space.
- *
- *   X axis: Deontology (-1) ←→ Consequentialism (+1)
- *   Y axis: Individualism (-1) ←→ Collectivism (+1)
- *   Z axis: Emotional (-1) ←→ Rational (+1)
- */
-const TRIBE_COORDS: Record<Tribe, [number, number, number]> = {
-  Utilitarian: [0.9, 0.8, 0.6],
-  Deontologist: [-0.9, 0.3, 0.6],
-  VirtueEthicist: [-0.2, 0.1, 0.0],
-  Nihilist: [0.2, -0.4, 0.5],
-  Stoic: [-0.4, -0.1, 0.9],
-  Existentialist: [0.1, -0.7, -0.5],
-  Hedonist: [0.6, -0.8, -0.7],
-};
-
-export function computeConstellation(history: Tribe[]): {
-  position: [number, number, number];
-  axes: { x: number; y: number; z: number };
-  trajectory: { tribe: Tribe; position: [number, number, number] }[];
-} {
-  if (history.length === 0) {
-    return {
-      position: [0, 0, 0],
-      axes: { x: 0, y: 0, z: 0 },
-      trajectory: [],
-    };
-  }
-
-  // Recent tribes weigh more. Linear ramp from 0.5 (oldest) to 1.0 (newest).
-  const n = history.length;
-  let wx = 0,
-    wy = 0,
-    wz = 0,
-    wsum = 0;
-  const trajectory: { tribe: Tribe; position: [number, number, number] }[] = [];
-
-  for (let i = 0; i < n; i++) {
-    const tribe = history[i]!;
-    const coord = TRIBE_COORDS[tribe];
-    const weight = 0.5 + 0.5 * (i / Math.max(1, n - 1));
-    wx += coord[0] * weight;
-    wy += coord[1] * weight;
-    wz += coord[2] * weight;
-    wsum += weight;
-    trajectory.push({ tribe, position: coord });
-  }
-
-  const x = wx / wsum;
-  const y = wy / wsum;
-  const z = wz / wsum;
-
-  return {
-    position: [x, y, z],
-    axes: { x, y, z },
-    trajectory,
-  };
-}

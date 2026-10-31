@@ -96,6 +96,17 @@ model User {
   partyProStripeSubscriptionId String?   @unique
   partyProStripePriceLookupKey String?
   partyProCurrentPeriodEnd     DateTime?
+  // System-owned accounts that play the AI sparring partner. Never able to
+  // log in (random unusable password) and excluded from public listings.
+  isBot          Boolean  @default(false)
+  // Streak freezes bought with Wisdom Points. One is consumed per missed
+  // day, automatically, the next time the user casts a vow.
+  streakFreezes  Int      @default(0)
+  // Set when the user finishes (or skips) the first-run practice round.
+  onboardedAt    DateTime?
+  // Set when the user confirms at registration that they are 13 or older
+  // (or are joining through a school with a teacher's invite code).
+  ageAttestedAt  DateTime?
   createdAt      DateTime @default(now())
 
   votes            Vote[]
@@ -119,6 +130,10 @@ model User {
   lateVowGrantsIssued LateVowGrant[] @relation("LateVowGrantAdmin")
   // Global late-vow grants issued by this admin (audit back-ref).
   globalLateVowGrantsIssued GlobalLateVowGrant[] @relation("GlobalLateVowGrantAdmin")
+  oracleMarks         OracleMark[]
+  streakFreezeUses    StreakFreezeUse[]
+  reportsFiled        DuelReport[] @relation("DuelReportReporter")
+  reportsAgainst      DuelReport[] @relation("DuelReportReported")
 }
 
 // Admin-issued exemption that lets one user cast a vote on one paradox
@@ -257,6 +272,9 @@ model Vote {
   tribeReasoning String?
   createdAt     DateTime @default(now())
   sortedAt      DateTime?
+  // True when the vow was cast after the Vow window closed (self-serve late
+  // vow). Late vows are sorted immediately and still count for streaks.
+  isLate        Boolean  @default(false)
   // Scopes a vote to a private circle game. Null = global/public game.
   // Runtime routing by circle game is not wired yet — see Circles rollout notes.
   circleGameId  String?
@@ -325,6 +343,13 @@ model Duel {
   signedByBAt          DateTime?
   declinedAt           DateTime?
   bothSigned           Boolean  @default(false)
+  // "pvp" (two humans), "spar" (human vs the AI sparring partner) or
+  // "practice" (first-run tutorial spar — no score changes).
+  kind                 String   @default("pvp")
+  // Live-state checkpoint (participants, acknowledgements, extension
+  // requests, awarded marks). Written on every state change so a server
+  // restart can rebuild in-flight duels — see sockets/duelRecovery.ts.
+  stateJson            Json     @default("{}")
   startedAt            DateTime @default(now())
   endedAt              DateTime?
   // Scopes a duel to a private circle game. Null = global/public game.
@@ -336,6 +361,8 @@ model Duel {
   circleGame CircleGame? @relation(fields: [circleGameId], references: [id], onDelete: SetNull)
 
   archive SynthesisArchive?
+  marks   OracleMark[]
+  reports DuelReport[]
 
   @@index([paradoxId])
   @@index([bothSigned])
@@ -510,4 +537,62 @@ model CircleParadoxPack {
   package   ParadoxPackage @unique
   paradoxes Json
   updatedAt DateTime       @updatedAt
+}
+
+// One row per Gold Star / Red Flag the Oracle awards during a duel's
+// Crucible. Drives WP, badges, Tribe Wars and the public highlights feed.
+// `isPublic` is false for duels involving school-circle (minor) accounts —
+// those messages never appear in public highlights.
+model OracleMark {
+  id          String   @id @default(cuid())
+  userId      String
+  duelId      String
+  paradoxId   String
+  kind        String   // "gold_star" | "red_flag"
+  fallacyType String?
+  tribe       Tribe
+  messageText String
+  explanation String
+  isPublic    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  duel Duel @relation(fields: [duelId], references: [id], onDelete: Cascade)
+
+  @@index([userId, kind])
+  @@index([createdAt, kind])
+  @@index([paradoxId, kind])
+}
+
+// A streak freeze spent to cover one missed day.
+model StreakFreezeUse {
+  id        String   @id @default(cuid())
+  userId    String
+  date      DateTime @db.Date
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+}
+
+// Player-filed report against their duel opponent. Reviewed in the admin
+// panel. `status` is "open" until an admin resolves it.
+model DuelReport {
+  id         String    @id @default(cuid())
+  duelId     String
+  reporterId String
+  reportedId String
+  reason     String    // "harassment" | "hate" | "sexual" | "spam" | "other"
+  note       String?
+  status     String    @default("open")
+  createdAt  DateTime  @default(now())
+  resolvedAt DateTime?
+
+  duel     Duel @relation(fields: [duelId], references: [id], onDelete: Cascade)
+  reporter User @relation("DuelReportReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  reported User @relation("DuelReportReported", fields: [reportedId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([reportedId])
 }

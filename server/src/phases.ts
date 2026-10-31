@@ -1,89 +1,135 @@
 import { env } from "./env.js";
+import { addDaysYmd, zonedParts, zonedTimeToUtc, zonedYmd } from "./lib/time.js";
 
 export type Phase = "drop" | "vow" | "sort" | "duel" | "bridge";
 
-export interface PhaseState {
-  phase: Phase;
-  /** Local server date in YYYY-MM-DD used to key paradoxes/votes. */
-  today: string;
-  /** ISO timestamp at which the current phase ends (approximate). */
-  nextTransitionAt: string;
-  /** True when TEST_MODE is enabled — the client uses this to unlock UI. */
-  testMode: boolean;
+export interface PhaseSchedule {
+  /** IANA zone the whole game runs on. */
+  timezone: string;
+  dropHour: number;
+  vowEndHour: number;
+  /** Prime-time duel bell. Duels are open from vowEndHour, busiest after this. */
+  duelHour: number;
 }
 
-/**
- * Phase resolution is single-source-of-truth on the server. The client trusts
- * this so all phase-gating logic lives in one place.
- *
- * Phase boundaries (local time):
- *   [DROP_HOUR, VOW_END)        → "drop"  (paradox visible, voting open)
- *   [VOW_END,  SORT_END)        → "sort"  (voting closed, tribe assigned)
- *   [SORT_END, next DROP_HOUR)  → "duel"  (matchmaking + debate — Phase IV)
- *   before DROP_HOUR            → "bridge" of yesterday's duel (Phase V tail)
- *
- * The "vow" phase label is emitted during DROP window too — the client uses
- * vote-completion state to decide whether to show the Drop or the Vow UI.
- */
-export function resolvePhase(now: Date = new Date()): PhaseState {
-  if (env.PHASE_OVERRIDE) {
-    return {
-      phase: env.PHASE_OVERRIDE,
-      today: ymd(now),
-      nextTransitionAt: endOfDay(now).toISOString(),
-      testMode: env.TEST_MODE,
-    };
-  }
+export interface PhaseState {
+  phase: Phase;
+  /** Game-zone date in YYYY-MM-DD used to key paradoxes/votes. */
+  today: string;
+  /** ISO timestamp at which the current phase ends. */
+  nextTransitionAt: string;
+  /** ISO timestamp of the next Drop — lets clients show it in local time. */
+  nextDropAt: string;
+  /** True when TEST_MODE is enabled — the client uses this to unlock UI. */
+  testMode: boolean;
+  schedule: PhaseSchedule;
+}
 
-  const hour = now.getHours();
-  const drop = env.PHASE_DROP_HOUR;
-  const vowEnd = env.PHASE_VOW_END_HOUR;
-  const sortEnd = env.PHASE_SORT_END_HOUR;
-
-  let phase: Phase;
-  let transitionHour: number;
-  let transitionDay = new Date(now);
-
-  if (hour < drop) {
-    phase = "bridge";
-    transitionHour = drop;
-  } else if (hour < vowEnd) {
-    phase = "vow";
-    transitionHour = vowEnd;
-  } else if (hour < sortEnd) {
-    phase = "sort";
-    transitionHour = sortEnd;
-  } else {
-    phase = "duel";
-    transitionHour = drop;
-    transitionDay.setDate(transitionDay.getDate() + 1);
-  }
-
-  transitionDay.setHours(transitionHour, 0, 0, 0);
-
+export function phaseSchedule(): PhaseSchedule {
   return {
-    phase,
-    today: ymd(now),
-    nextTransitionAt: transitionDay.toISOString(),
-    testMode: env.TEST_MODE,
+    timezone: env.PHASE_TIMEZONE,
+    dropHour: env.PHASE_DROP_HOUR,
+    vowEndHour: env.PHASE_VOW_END_HOUR,
+    duelHour: env.PHASE_SORT_END_HOUR,
   };
 }
 
+/**
+ * Phase resolution is single-source-of-truth on the server, on the game
+ * clock (PHASE_TIMEZONE) — never the host's local time.
+ *
+ * Phase boundaries (game-zone wall clock):
+ *   [DROP_HOUR, VOW_END)        → "vow"    (paradox visible, voting open)
+ *   [VOW_END,  SORT_END)        → "sort"   (tribes revealed, duels open, late vows allowed)
+ *   [SORT_END, midnight)        → "duel"   (prime-time duels, late vows allowed)
+ *   [midnight, DROP_HOUR)       → "bridge" (overnight: yesterday's results, wait for the Drop)
+ */
+export function resolvePhase(now: Date = new Date()): PhaseState {
+  const schedule = phaseSchedule();
+  const tz = schedule.timezone;
+  const today = zonedYmd(now, tz);
+  const nextDropAt = nextDrop(now, schedule).toISOString();
+
+  if (env.PHASE_OVERRIDE) {
+    return {
+      phase: env.PHASE_OVERRIDE,
+      today,
+      nextTransitionAt: atHour(today, 24, tz).toISOString(),
+      nextDropAt,
+      testMode: env.TEST_MODE,
+      schedule,
+    };
+  }
+
+  const hour = zonedParts(now, tz).hour;
+  let phase: Phase;
+  let transition: Date;
+
+  if (hour < schedule.dropHour) {
+    phase = "bridge";
+    transition = atHour(today, schedule.dropHour, tz);
+  } else if (hour < schedule.vowEndHour) {
+    phase = "vow";
+    transition = atHour(today, schedule.vowEndHour, tz);
+  } else if (hour < schedule.duelHour) {
+    phase = "sort";
+    transition = atHour(today, schedule.duelHour, tz);
+  } else {
+    phase = "duel";
+    // Duels close at midnight game time — after that "today" is a new date
+    // whose paradox has not dropped yet.
+    transition = atHour(today, 24, tz);
+  }
+
+  return {
+    phase,
+    today,
+    nextTransitionAt: transition.toISOString(),
+    nextDropAt,
+    testMode: env.TEST_MODE,
+    schedule,
+  };
+}
+
+/** True when late (post-window) vows are accepted for today's paradox. */
+export function lateVowsOpen(state: PhaseState): boolean {
+  return env.ALLOW_LATE_VOWS && (state.phase === "sort" || state.phase === "duel");
+}
+
+/** True when duels (human or AI) can be started for today's paradox. */
+export function duelsOpen(state: PhaseState): boolean {
+  return state.phase === "sort" || state.phase === "duel";
+}
+
+function atHour(ymdStr: string, hour: number, tz: string): Date {
+  const [y, m, d] = ymdStr.split("-").map(Number);
+  if (hour >= 24) {
+    const next = addDaysYmd(ymdStr, 1).split("-").map(Number);
+    return zonedTimeToUtc(next[0]!, next[1]!, next[2]!, hour - 24, tz);
+  }
+  return zonedTimeToUtc(y!, m!, d!, hour, tz);
+}
+
+function nextDrop(now: Date, schedule: PhaseSchedule): Date {
+  const today = zonedYmd(now, schedule.timezone);
+  const todayDrop = atHour(today, schedule.dropHour, schedule.timezone);
+  if (todayDrop.getTime() > now.getTime()) return todayDrop;
+  return atHour(addDaysYmd(today, 1), schedule.dropHour, schedule.timezone);
+}
+
+/**
+ * Format a Prisma @db.Date (stored at UTC midnight) as YYYY-MM-DD.
+ * Do not pass "now" here — use resolvePhase().today for the game date.
+ */
 export function ymd(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 }
 
-function endOfDay(d: Date): Date {
-  const copy = new Date(d);
-  copy.setHours(23, 59, 59, 999);
-  return copy;
-}
-
-/** Parse YYYY-MM-DD into a local-midnight Date (for Prisma date columns). */
+/** Parse YYYY-MM-DD into a UTC-midnight Date (what Prisma uses for @db.Date). */
 export function parseYmd(s: string): Date {
   const [y, m, d] = s.split("-").map(Number);
-  return new Date(y!, (m ?? 1) - 1, d ?? 1);
+  return new Date(Date.UTC(y!, (m ?? 1) - 1, d ?? 1));
 }

@@ -68,27 +68,62 @@ const SYSTEM_PROMPT = `You are the Oracle in PARADOX, a live debate platform. Yo
 
 ## Rules
 
-- You see one message at a time, without context. Judge on what is present.
+- You see the TARGET message, plus up to four earlier messages from the same
+  debate as context. Judge ONLY the target message. Use the context to tell a
+  fair summary of the opponent's view from a straw man, and a pointed
+  question from an insult — never flag the target for something an earlier
+  message did.
 - If in doubt, return "clean". False positives are worse than misses.
 - Do not flag disagreement or strong tone as a fallacy. Heat is not fallacy.
 - Do not flag every rhetorical flourish as "strong_logic". The bar is
   technical — a specific logical move that a debate coach would praise.
 - Output EXACTLY one JSON object. No prose. No markdown fences.`;
 
-export async function analyzeMessage(text: string): Promise<OracleVerdict> {
+export interface ContextMessage {
+  /** "A" or "B" — which debater wrote it. Names are withheld. */
+  speaker: "A" | "B";
+  text: string;
+}
+
+/**
+ * Classify one Crucible message. Runs on ORACLE_FAST_MODEL (a small, fast
+ * model) because it sits on the hot path of every duel message — the
+ * opponent's copy is held until this verdict arrives so ad hominem can be
+ * redacted before they see it.
+ */
+export async function analyzeMessage(
+  text: string,
+  context: ContextMessage[] = [],
+  targetSpeaker: "A" | "B" = "A",
+): Promise<OracleVerdict> {
+  const recent = context.slice(-4);
+  const contextBlock =
+    recent.length > 0
+      ? `Earlier messages (context only):\n${recent.map((m) => `[${m.speaker}] ${m.text}`).join("\n")}\n\n`
+      : "";
+  const userContent = `${contextBlock}TARGET message from debater ${targetSpeaker}:\n"${text}"`;
+
+  const params: Anthropic.MessageCreateParamsNonStreaming & {
+    output_config?: { effort: string };
+  } = {
+    model: env.ORACLE_FAST_MODEL,
+    // Room for adaptive thinking on current small models; the JSON itself is tiny.
+    max_tokens: 2000,
+    system: [
+      {
+        type: "text",
+        text: SYSTEM_PROMPT,
+        cache_control: { type: "ephemeral" },
+      },
+    ],
+    messages: [{ role: "user", content: userContent }],
+  };
+  // Classification doesn't need deep thought — keep it fast. Configurable
+  // (set ORACLE_FAST_EFFORT="" to omit for models without effort support).
+  if (env.ORACLE_FAST_EFFORT) params.output_config = { effort: env.ORACLE_FAST_EFFORT };
+
   try {
-    const response = await client.messages.create({
-      model: env.ANTHROPIC_MODEL,
-      max_tokens: 400,
-      system: [
-        {
-          type: "text",
-          text: SYSTEM_PROMPT,
-          cache_control: { type: "ephemeral" },
-        },
-      ],
-      messages: [{ role: "user", content: `Analyse this debate message:\n\n"${text}"` }],
-    });
+    const response = await client.messages.create(params);
 
     const raw = response.content
       .filter((b): b is Anthropic.TextBlock => b.type === "text")

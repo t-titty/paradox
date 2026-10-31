@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "../db.js";
 import { requireAdmin, type AuthedRequest } from "../middleware/auth.js";
 import { HttpError } from "../middleware/error.js";
-import { parseYmd, ymd } from "../phases.js";
+import { parseYmd, resolvePhase, ymd } from "../phases.js";
 import {
   TEST_MODE_SETTING_KEY,
   systemTestModeEnabled,
@@ -24,14 +24,15 @@ adminRouter.get("/stats", async (_req, res, next) => {
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
 
-    const [totalUsers, votesToday, activeDuels, synthesesSigned, pendingSubmissions, totalFeedback] =
+    const [totalUsers, votesToday, activeDuels, synthesesSigned, pendingSubmissions, totalFeedback, openReports] =
       await Promise.all([
-        prisma.user.count(),
+        prisma.user.count({ where: { isBot: false } }),
         prisma.vote.count({ where: { createdAt: { gte: startOfToday } } }),
         prisma.duel.count({ where: { endedAt: null, declinedAt: null } }),
         prisma.duel.count({ where: { bothSigned: true } }),
         prisma.submittedParadox.count({ where: { status: "pending" } }),
         prisma.feedback.count(),
+        prisma.duelReport.count({ where: { status: "open" } }),
       ]);
 
     res.json({
@@ -42,6 +43,7 @@ adminRouter.get("/stats", async (_req, res, next) => {
         synthesesSigned,
         pendingSubmissions,
         totalFeedback,
+        openReports,
       },
     });
   } catch (e) {
@@ -565,7 +567,7 @@ adminRouter.get("/global-late-vow-grants", async (req, res, next) => {
     const paradoxDate =
       typeof req.query.paradoxDate === "string"
         ? req.query.paradoxDate
-        : ymd(new Date());
+        : resolvePhase().today;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(paradoxDate)) {
       throw new HttpError(400, "Invalid paradoxDate", "bad_request");
     }
@@ -685,6 +687,58 @@ adminRouter.delete("/global-late-vow-grants/:id", async (req, res, next) => {
       data: { isActive: false, revokedAt: new Date() },
     });
     res.status(204).end();
+  } catch (e) {
+    next(e);
+  }
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// Duel reports — players flag their opponent from inside a duel. The
+// transcript ships with the report so a moderator can judge in one view.
+// ──────────────────────────────────────────────────────────────────────────
+
+adminRouter.get("/reports", async (req, res, next) => {
+  try {
+    const status = req.query.status === "resolved" ? "resolved" : "open";
+    const reports = await prisma.duelReport.findMany({
+      where: { status },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+      select: {
+        id: true,
+        reason: true,
+        note: true,
+        status: true,
+        createdAt: true,
+        resolvedAt: true,
+        reporter: { select: { id: true, username: true } },
+        reported: { select: { id: true, username: true, civilityScore: true, isBanned: true, isBot: true } },
+        duel: {
+          select: {
+            id: true,
+            kind: true,
+            startedAt: true,
+            transcriptJson: true,
+            paradox: { select: { title: true } },
+          },
+        },
+      },
+    });
+    res.json({ reports });
+  } catch (e) {
+    next(e);
+  }
+});
+
+adminRouter.post("/reports/:id/resolve", async (req, res, next) => {
+  try {
+    const id = req.params.id ?? "";
+    const report = await prisma.duelReport.update({
+      where: { id },
+      data: { status: "resolved", resolvedAt: new Date() },
+      select: { id: true, status: true, resolvedAt: true },
+    });
+    res.json({ report });
   } catch (e) {
     next(e);
   }

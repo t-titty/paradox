@@ -21,9 +21,15 @@ import { adminRouter } from "./routes/admin.js";
 import { stripeRouter } from "./routes/stripe.js";
 import { stripeWebhookRouter } from "./routes/stripeWebhook.js";
 import { notificationsRouter } from "./routes/notifications.js";
+import { practiceRouter } from "./routes/practice.js";
+import { streakRouter } from "./routes/streak.js";
+import { publicRouter } from "./routes/public.js";
+import { registerSeoRoutes } from "./lib/seo.js";
 import { errorHandler } from "./middleware/error.js";
 import { createSocketServer } from "./sockets/index.js";
 import { startNotificationScheduler } from "./lib/notificationScheduler.js";
+import { startGameScheduler } from "./lib/gameScheduler.js";
+import { recoverDuels } from "./sockets/duelRecovery.js";
 
 const app = express();
 
@@ -54,6 +60,9 @@ app.use("/api/feedback", feedbackRouter);
 app.use("/api/submissions", submissionsRouter);
 app.use("/api/admin", adminRouter);
 app.use("/api/notifications", notificationsRouter);
+app.use("/api/practice", practiceRouter);
+app.use("/api/streak", streakRouter);
+app.use("/api/public", publicRouter);
 
 // In production, serve the built client from the same origin. The client
 // is built to client/dist; at runtime this file is server/dist/index.js,
@@ -61,7 +70,12 @@ app.use("/api/notifications", notificationsRouter);
 if (env.NODE_ENV === "production") {
   const here = path.dirname(fileURLToPath(import.meta.url));
   const clientDist = path.resolve(here, "../../client/dist");
-  app.use(express.static(clientDist));
+  // Public pages get real <title>/Open Graph tags for crawlers and link
+  // previews, plus robots.txt and a sitemap. Must precede the static/SPA
+  // handlers below.
+  registerSeoRoutes(app, path.join(clientDist, "index.html"));
+  app.use(express.static(clientDist, { index: false }));
+  app.get("/", (_req, res) => res.sendFile(path.join(clientDist, "index.html")));
   // SPA fallback. Anything that isn't an /api or /socket.io request falls
   // through to index.html so client-side routes work on refresh.
   app.get(/^\/(?!api\/|socket\.io\/).*/, (_req, res) => {
@@ -72,14 +86,20 @@ if (env.NODE_ENV === "production") {
 app.use(errorHandler);
 
 const httpServer = createServer(app);
-createSocketServer(httpServer);
+const io = createSocketServer(httpServer);
 
-httpServer.listen(env.PORT, () => {
-  console.log(`[paradox] listening on :${env.PORT} (${env.NODE_ENV})`);
-  // Kick off the phase-kickoff push scheduler. It self-disables when
-  // VAPID isn't configured so dev without keys still boots cleanly.
-  startNotificationScheduler();
-});
+// Rebuild any duels that were live when the previous process stopped,
+// *before* accepting connections so reconnecting players land back in them.
+recoverDuels(io)
+  .catch((e) => console.error("[paradox] duel recovery failed:", e))
+  .finally(() => {
+    httpServer.listen(env.PORT, () => {
+      console.log(`[paradox] listening on :${env.PORT} (${env.NODE_ENV}) · game clock ${env.PHASE_TIMEZONE}`);
+      // Push scheduler self-disables when VAPID isn't configured.
+      startNotificationScheduler();
+      startGameScheduler();
+    });
+  });
 
 async function shutdown(signal: string) {
   console.log(`[paradox] ${signal} received, shutting down`);

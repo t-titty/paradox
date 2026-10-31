@@ -31,6 +31,37 @@ const schema = z.object({
   PUBLIC_APP_URL: z.string().url().default("http://localhost:5173"),
   ANTHROPIC_API_KEY: z.string().min(1),
   ANTHROPIC_MODEL: z.string().default("claude-sonnet-4-6"),
+  // Small, fast model for the per-message Crucible checks (Red Flags /
+  // Gold Stars / ad-hominem redaction). Runs on every duel message, so
+  // latency and cost matter far more than depth here.
+  ORACLE_FAST_MODEL: z.string().default("claude-haiku-5-5"),
+  // Effort for the fast model ("low" | "medium" | ...). Empty = omit the
+  // parameter (for models that don't support effort).
+  ORACLE_FAST_EFFORT: z.string().default("low"),
+  // Model that plays the AI sparring partner. Defaults to ANTHROPIC_MODEL.
+  SPAR_MODEL: z
+    .string()
+    .optional()
+    .transform((v) => (v && v.length > 0 ? v : undefined)),
+  // The game clock. Every player shares one Drop / Vow close / Duel bell in
+  // this IANA zone, regardless of the host's own time zone.
+  PHASE_TIMEZONE: z
+    .string()
+    .default("America/New_York")
+    .refine((tz) => {
+      try {
+        new Intl.DateTimeFormat("en-US", { timeZone: tz });
+        return true;
+      } catch {
+        return false;
+      }
+    }, "PHASE_TIMEZONE must be a valid IANA time zone"),
+  // Self-serve late vows: players who miss the Vow window can still vote
+  // (and get sorted + duel) until midnight game time.
+  ALLOW_LATE_VOWS: z
+    .string()
+    .optional()
+    .transform((v) => v === undefined || v === "" || v === "true" || v === "1"),
   PHASE_DROP_HOUR: z.coerce.number().int().min(0).max(23).default(8),
   PHASE_VOW_END_HOUR: z.coerce.number().int().min(0).max(23).default(12),
   PHASE_SORT_END_HOUR: z.coerce.number().int().min(0).max(23).default(20),

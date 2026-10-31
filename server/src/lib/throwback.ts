@@ -1,5 +1,6 @@
 import { prisma } from "../db.js";
 import { parseYmd } from "../phases.js";
+import { addDaysYmd, weekdayYmd } from "./time.js";
 
 /**
  * Throwback Thursday: on Thursdays, surface a user's oldest eligible prior
@@ -15,11 +16,9 @@ import { parseYmd } from "../phases.js";
  * Returns the oldest eligible vote + its paradox, or null if none.
  */
 export async function findThrowbackVote(userId: string, today: string) {
-  const todayDate = parseYmd(today);
-  if (todayDate.getDay() !== 4) return null; // 0=Sun..4=Thu
+  if (weekdayYmd(today) !== 4) return null; // 0=Sun..4=Thu
 
-  const cutoff = new Date(todayDate);
-  cutoff.setDate(cutoff.getDate() - 28);
+  const cutoff = parseYmd(addDaysYmd(today, -28));
 
   // Grab the user's oldest votes, then filter: paradox aired on a Thursday,
   // old enough, and not yet revisited.
@@ -47,7 +46,7 @@ export async function findThrowbackVote(userId: string, today: string) {
   });
 
   for (const vote of votes) {
-    if (vote.paradox.airDate && vote.paradox.airDate.getDay() === 4) {
+    if (vote.paradox.airDate && vote.paradox.airDate.getUTCDay() === 4) {
       return vote;
     }
   }

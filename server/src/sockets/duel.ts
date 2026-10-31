@@ -56,6 +56,12 @@ const MIN_MESSAGE_GAP_MS = 800;
 /** Ended duels stay in memory this long so signatures can land. */
 const POST_DUEL_RETENTION_MS = 10 * 60 * 1000;
 
+let shuttingDown = false;
+/** Called on SIGTERM: sockets are about to drop because of us, not the players. */
+export function markShuttingDown(): void {
+  shuttingDown = true;
+}
+
 export function roomName(duelId: string): string {
   return `duel:${duelId}`;
 }
@@ -505,6 +511,7 @@ export function registerDuelHandlers(io: Io, socket: IoSocket): void {
   });
 
   socket.on("disconnect", () => {
+    if (shuttingDown) return;
     const state = duelRegistry.getForUser(socket.data.userId);
     if (!state || state.ended) return;
     // Another tab for the same player may still be connected.
@@ -522,6 +529,8 @@ export function startGhostTimer(
   userId: string,
   username: string,
   graceMs: number,
+  /** False after a server restart: a no-show then isn't the player's fault. */
+  penalize = true,
 ): void {
   clearDisconnectTimer(state, userId);
   const timer = setTimeout(() => {
@@ -529,8 +538,13 @@ export function startGhostTimer(
     void endDuel(
       io,
       state,
-      { kind: "ghost", message: `${username} did not return. The duel is void.` },
-      userId,
+      {
+        kind: "ghost",
+        message: penalize
+          ? `${username} did not return. The duel is void.`
+          : `${username} could not reconnect after a server restart. The duel is void — no penalty.`,
+      },
+      penalize ? userId : undefined,
     );
   }, graceMs);
   state.disconnectTimers.set(userId, timer);
@@ -915,6 +929,9 @@ async function applyEndOfDuelGamification(
   if (!state.scored) return;
   const isSpar = state.kind === "spar";
   const humans = [state.userA, state.userB].filter((p) => !p.isBot);
+
+  // No-fault ghost (couldn't reconnect after a restart): nothing is scored.
+  if (reason.kind === "ghost" && !ghosterUserId) return;
 
   if (reason.kind === "ghost" && ghosterUserId) {
     // Walking out on the AI isn't a civility offence — nobody was left hanging.

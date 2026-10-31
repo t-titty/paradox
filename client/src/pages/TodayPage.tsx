@@ -26,6 +26,8 @@ export function TodayPage() {
   const [state, setState] = useState<TodayResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [phaseOverride, setPhaseOverride] = useState<Phase | null>(null);
+  // While a duel is live, the duel room gets the whole screen.
+  const [inDuel, setInDuel] = useState(false);
 
   async function load(override: Phase | null = phaseOverride) {
     try {
@@ -111,9 +113,9 @@ export function TodayPage() {
 
   return (
     <div className="flex flex-col">
-      {banner}
-      {countdown}
-      {state.needsOnboarding && <OnboardingNudge />}
+      {!inDuel && banner}
+      {!inDuel && countdown}
+      {!inDuel && state.needsOnboarding && <OnboardingNudge />}
       {showVowForm ? (
         <>
           {phase.phase !== "vow" && !hasVoted && <LateVowBanner />}
@@ -132,7 +134,7 @@ export function TodayPage() {
           />
         </>
       ) : hasVoted && state.duelsOpen ? (
-        <ResultsAndArena defaultTab={phase.phase === "duel" ? "arena" : "results"} />
+        <ResultsAndArena defaultTab={phase.phase === "duel" ? "arena" : "results"} onInDuel={setInDuel} />
       ) : (
         <Placeholder
           roman="III"
@@ -144,7 +146,13 @@ export function TodayPage() {
   );
 }
 
-function ResultsAndArena({ defaultTab }: { defaultTab: "results" | "arena" }) {
+function ResultsAndArena({
+  defaultTab,
+  onInDuel,
+}: {
+  defaultTab: "results" | "arena";
+  onInDuel: (active: boolean) => void;
+}) {
   const [tab, setTab] = useState<"results" | "arena">(defaultTab);
   const [inDuel, setInDuel] = useState(false);
 
@@ -168,6 +176,7 @@ function ResultsAndArena({ defaultTab }: { defaultTab: "results" | "arena" }) {
         <DuelFlow
           onActiveChange={(active) => {
             setInDuel(active);
+            onInDuel(active);
             if (active) setTab("arena");
           }}
         />

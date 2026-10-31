@@ -30,6 +30,7 @@ import { createSocketServer } from "./sockets/index.js";
 import { startNotificationScheduler } from "./lib/notificationScheduler.js";
 import { startGameScheduler } from "./lib/gameScheduler.js";
 import { recoverDuels } from "./sockets/duelRecovery.js";
+import { markShuttingDown } from "./sockets/duel.js";
 
 const app = express();
 
@@ -101,9 +102,18 @@ recoverDuels(io)
     });
   });
 
+let stopping = false;
 async function shutdown(signal: string) {
+  if (stopping) return;
+  stopping = true;
   console.log(`[paradox] ${signal} received, shutting down`);
-  httpServer.close(() => {
+  // Live duels are checkpointed; the next process recovers them. Drop every
+  // socket now (without treating it as players leaving) so clients reconnect
+  // to the new instance instead of lingering on this one.
+  markShuttingDown();
+  const force = setTimeout(() => process.exit(0), 5000);
+  force.unref();
+  io.close(() => {
     prisma.$disconnect().finally(() => process.exit(0));
   });
 }

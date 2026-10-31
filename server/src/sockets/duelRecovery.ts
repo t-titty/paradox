@@ -113,7 +113,7 @@ export async function recoverDuels(io: Io): Promise<void> {
     }
     scheduleTimers(io, state);
     for (const p of [state.userA, state.userB]) {
-      if (!p.isBot) startGhostTimer(io, state, p.userId, p.username, RECOVERY_GRACE_MS);
+      if (!p.isBot) startGhostTimer(io, state, p.userId, p.username, RECOVERY_GRACE_MS, false);
     }
     resumed++;
   }

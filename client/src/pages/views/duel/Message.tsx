@@ -48,7 +48,7 @@ export function Message({ message, isSelf }: Props) {
       </div>
       {message.redacted && (
         <p className="font-mono text-xs uppercase tracking-brutal text-blood">
-          AD HOMINEM · YOUR OPPONENT NEVER SAW THIS · −10 CIVILITY
+          AD HOMINEM · YOUR OPPONENT NEVER SAW THIS
         </p>
       )}
       {message.verdict && message.verdict.kind !== "clean" && message.verdict.explanation && !message.redacted && (

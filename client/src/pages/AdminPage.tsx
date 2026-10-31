@@ -8,6 +8,7 @@ type Tab =
   | "submissions"
   | "feedback"
   | "users"
+  | "reports"
   | "developer";
 
 interface Stats {
@@ -17,6 +18,7 @@ interface Stats {
   synthesesSigned: number;
   pendingSubmissions: number;
   totalFeedback: number;
+  openReports?: number;
 }
 
 interface ParadoxRow {
@@ -96,6 +98,7 @@ export function AdminPage() {
         <TabBtn active={tab === "submissions"} onClick={() => setTab("submissions")}>SUBMISSIONS</TabBtn>
         <TabBtn active={tab === "feedback"} onClick={() => setTab("feedback")}>FEEDBACK</TabBtn>
         <TabBtn active={tab === "users"} onClick={() => setTab("users")}>USERS</TabBtn>
+        <TabBtn active={tab === "reports"} onClick={() => setTab("reports")}>REPORTS</TabBtn>
         <TabBtn active={tab === "developer"} onClick={() => setTab("developer")}>DEVELOPER</TabBtn>
       </nav>
 
@@ -109,6 +112,7 @@ export function AdminPage() {
           <LateVowGrantsPanel />
         </div>
       )}
+      {tab === "reports" && <ReportsPanel />}
       {tab === "developer" && <DeveloperPanel />}
     </div>
   );
@@ -178,6 +182,7 @@ function StatsPanel() {
       <StatCard label="SYNTHESES SIGNED" value={stats.synthesesSigned} />
       <StatCard label="PENDING SUBMISSIONS" value={stats.pendingSubmissions} />
       <StatCard label="TOTAL FEEDBACK" value={stats.totalFeedback} />
+      <StatCard label="OPEN REPORTS" value={stats.openReports ?? 0} />
     </div>
   );
 }
@@ -521,6 +526,104 @@ function FeedbackPanel() {
             {new Date(f.createdAt).toDateString().toUpperCase()}
           </p>
           <p className="mt-2 whitespace-pre-wrap font-mono text-sm text-bone">{f.message}</p>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+interface ReportRow {
+  id: string;
+  reason: string;
+  note: string | null;
+  status: string;
+  createdAt: string;
+  reporter: { id: string; username: string };
+  reported: { id: string; username: string; civilityScore: number; isBanned: boolean; isBot: boolean };
+  duel: {
+    id: string;
+    kind: string;
+    startedAt: string;
+    transcriptJson: { id: string; username: string; text: string; mode: string; redacted?: boolean }[];
+    paradox: { title: string };
+  };
+}
+
+/** Player-filed duel reports, with the transcript inline for quick review. */
+function ReportsPanel() {
+  const [status, setStatus] = useState<"open" | "resolved">("open");
+  const [rows, setRows] = useState<ReportRow[] | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    setRows(null);
+    api
+      .get<{ reports: ReportRow[] }>("/admin/reports", { params: { status } })
+      .then((r) => setRows(r.data.reports))
+      .catch((e) => setErr(errorMessage(e, "Could not load reports.")));
+  }, [status]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function resolve(id: string) {
+    await api.post(`/admin/reports/${id}/resolve`).catch(() => undefined);
+    load();
+  }
+
+  async function ban(userId: string) {
+    if (!window.confirm("Ban this user?")) return;
+    await api.post(`/admin/users/${userId}/ban`, { banned: true }).catch(() => undefined);
+    load();
+  }
+
+  if (err) return <ErrorBox>{err}</ErrorBox>;
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex gap-2">
+        <TabBtn active={status === "open"} onClick={() => setStatus("open")}>OPEN</TabBtn>
+        <TabBtn active={status === "resolved"} onClick={() => setStatus("resolved")}>RESOLVED</TabBtn>
+      </div>
+      {!rows && <p className="brutal-heading text-muted">LOADING...</p>}
+      {rows && rows.length === 0 && <p className="font-mono text-sm text-muted">No {status} reports.</p>}
+      {rows?.map((r) => (
+        <article key={r.id} className="border-2 border-blood p-4">
+          <p className="font-mono text-xs uppercase tracking-brutal text-muted">
+            {r.reason} · {r.reporter.username} REPORTED{" "}
+            <span className="text-blood">{r.reported.username}</span>
+            {r.reported.isBot && " (AI PARTNER)"} · CIV {r.reported.civilityScore}
+            {r.reported.isBanned && " · BANNED"} · {new Date(r.createdAt).toLocaleString()}
+          </p>
+          <p className="mt-1 font-mono text-xs text-muted">
+            {r.duel.kind.toUpperCase()} DUEL · {r.duel.paradox.title}
+          </p>
+          {r.note && <p className="mt-2 font-mono text-sm text-bone">“{r.note}”</p>}
+          <details className="mt-3">
+            <summary className="cursor-pointer font-mono text-xs uppercase tracking-brutal text-gold">
+              TRANSCRIPT · {r.duel.transcriptJson.length} MESSAGES
+            </summary>
+            <div className="mt-2 flex max-h-80 flex-col gap-1 overflow-y-auto border border-smoke p-3 font-mono text-xs">
+              {r.duel.transcriptJson.map((m) => (
+                <p key={m.id} className={m.redacted ? "text-blood" : "text-bone"}>
+                  <span className="text-muted">[{m.mode}] {m.username}:</span> {m.text}
+                  {m.redacted && " (REDACTED — AD HOMINEM)"}
+                </p>
+              ))}
+            </div>
+          </details>
+          {r.status === "open" && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button className="brutal-btn text-xs" onClick={() => resolve(r.id)}>
+                MARK RESOLVED
+              </button>
+              {!r.reported.isBot && !r.reported.isBanned && (
+                <button className="brutal-btn brutal-btn-blood text-xs" onClick={() => ban(r.reported.id)}>
+                  BAN {r.reported.username}
+                </button>
+              )}
+            </div>
+          )}
         </article>
       ))}
     </div>

@@ -3,9 +3,9 @@ import type { Phase } from "../lib/types.ts";
 const LABELS: Record<Phase, { roman: string; title: string; sub: string }> = {
   drop: { roman: "I", title: "THE DROP", sub: "A new paradox arrives." },
   vow: { roman: "II", title: "THE VOW", sub: "Take a side. One sentence." },
-  sort: { roman: "III", title: "THE SORT", sub: "The Oracle has read you." },
-  duel: { roman: "IV", title: "THE DUEL", sub: "Ten minutes. Find your match." },
-  bridge: { roman: "V", title: "THE BRIDGE", sub: "Until dawn. Meet tomorrow." },
+  sort: { roman: "III", title: "THE SORT", sub: "Your tribe is revealed. The arena is open." },
+  duel: { roman: "IV", title: "THE DUEL", sub: "Prime time. Find your opposite." },
+  bridge: { roman: "V", title: "THE BRIDGE", sub: "Overnight. The next paradox drops at dawn." },
 };
 
 const ALL_PHASES: Phase[] = ["drop", "vow", "sort", "duel", "bridge"];

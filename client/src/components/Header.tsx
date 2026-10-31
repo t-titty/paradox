@@ -34,12 +34,14 @@ export function Header() {
 
         {/* Desktop nav + stats. Hidden on mobile. */}
         <div className="hidden flex-1 items-center justify-between gap-8 md:flex">
-          <nav className="flex items-center gap-5 font-mono text-xs uppercase tracking-brutal">
+          <nav className="flex flex-wrap items-center gap-x-5 gap-y-2 font-mono text-xs uppercase tracking-brutal">
             {user && <Nav to="/">TODAY</Nav>}
             <Nav to="/how-to-play">HOW TO PLAY</Nav>
+            <Nav to="/paradoxes">DILEMMAS</Nav>
+            <Nav to="/tribe-wars">TRIBE WARS</Nav>
             <Nav to="/archive">ARCHIVE</Nav>
             {user && <Nav to="/profile">PROFILE</Nav>}
-            {user && <Nav to="/library">LIBRARY</Nav>}
+            {user?.isAdmin && <Nav to="/library">LIBRARY</Nav>}
             {user && <Nav to="/submit">SUBMIT</Nav>}
             {user?.isAdmin && <Nav to="/circles">CIRCLES</Nav>}
             {user?.isAdmin && user?.ownsOrAdminsCircle && (
@@ -82,9 +84,11 @@ export function Header() {
           <nav className="flex flex-col font-mono text-sm uppercase tracking-brutal">
             {user && <MobileNav to="/" onClick={closeMenu}>TODAY</MobileNav>}
             <MobileNav to="/how-to-play" onClick={closeMenu}>HOW TO PLAY</MobileNav>
+            <MobileNav to="/paradoxes" onClick={closeMenu}>DILEMMAS</MobileNav>
+            <MobileNav to="/tribe-wars" onClick={closeMenu}>TRIBE WARS</MobileNav>
             <MobileNav to="/archive" onClick={closeMenu}>ARCHIVE</MobileNav>
             {user && <MobileNav to="/profile" onClick={closeMenu}>PROFILE</MobileNav>}
-            {user && <MobileNav to="/library" onClick={closeMenu}>LIBRARY</MobileNav>}
+            {user?.isAdmin && <MobileNav to="/library" onClick={closeMenu}>LIBRARY</MobileNav>}
             {user && <MobileNav to="/submit" onClick={closeMenu}>SUBMIT</MobileNav>}
             {user?.isAdmin && (
               <MobileNav to="/circles" onClick={closeMenu}>CIRCLES</MobileNav>

@@ -140,7 +140,7 @@ async function maybeWeeklyDrift(now: Date): Promise<void> {
   const result = await sendPushToAll({
     title: "YOUR WEEKLY MORAL DRIFT IS IN.",
     body: "See where your reasoning moved this week.",
-    url: "/me",
+    url: "/profile",
   });
   console.log(`[notifications] weekly drift sent=${result.sent}`);
 }

@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Link, Navigate, Route, Routes } from "react-router-dom";
 import { Header } from "./components/Header.tsx";
 import { TestModeBanner } from "./components/TestModeBanner.tsx";
 import { ProtectedRoute } from "./components/ProtectedRoute.tsx";
@@ -25,6 +25,12 @@ import { PartyPage } from "./pages/PartyPage.tsx";
 import { PricingPage } from "./pages/PricingPage.tsx";
 import { PricingSuccessPage } from "./pages/PricingSuccessPage.tsx";
 import { PricingCancelPage } from "./pages/PricingCancelPage.tsx";
+import { WelcomePage } from "./pages/WelcomePage.tsx";
+import { ParadoxesPage } from "./pages/ParadoxesPage.tsx";
+import { PublicParadoxPage } from "./pages/PublicParadoxPage.tsx";
+import { TribeWarsPage } from "./pages/TribeWarsPage.tsx";
+import { LessonPlansPage } from "./pages/LessonPlansPage.tsx";
+import { InstallPrompt } from "./components/InstallPrompt.tsx";
 
 // ProfilePage pulls in Three.js + r3f (heavy). Code-split it so only users
 // who visit /profile/* pay the download cost.
@@ -56,6 +62,10 @@ export default function App() {
           <Route path="/archive" element={<ArchivePage />} />
           <Route path="/terms" element={<TermsPage />} />
           <Route path="/how-to-play" element={<HowToPlayPage />} />
+          <Route path="/paradoxes" element={<ParadoxesPage />} />
+          <Route path="/p/:date" element={<PublicParadoxPage />} />
+          <Route path="/tribe-wars" element={<TribeWarsPage />} />
+          <Route path="/lesson-plans" element={<LessonPlansPage />} />
 
           {/* Admin-only (Circles + Colosseum surface is hidden from
               non-admins for now — silently redirected to home). */}
@@ -124,11 +134,20 @@ export default function App() {
             }
           />
           <Route
-            path="/library"
+            path="/welcome"
             element={
               <ProtectedRoute>
-                <LibraryPage />
+                <WelcomePage />
               </ProtectedRoute>
+            }
+          />
+          {/* Deep Dives are placeholder content — admin-only until written. */}
+          <Route
+            path="/library"
+            element={
+              <AdminOnlyRoute>
+                <LibraryPage />
+              </AdminOnlyRoute>
             }
           />
           <Route
@@ -192,11 +211,19 @@ export default function App() {
         </Routes>
       </main>
       <footer className="border-t-2 border-smoke px-4 py-6 md:px-6">
-        <p className="font-mono text-xs uppercase tracking-brutal text-muted">
-          © 2026 PARADOX. All rights reserved.
-        </p>
+        <div className="flex flex-col gap-3 font-mono text-xs uppercase tracking-brutal text-muted md:flex-row md:items-center md:justify-between">
+          <p>© 2026 PARADOX. All rights reserved.</p>
+          <nav className="flex flex-wrap gap-4">
+            <Link to="/paradoxes" className="hover:text-gold">DILEMMAS</Link>
+            <Link to="/tribe-wars" className="hover:text-gold">TRIBE WARS</Link>
+            <Link to="/archive" className="hover:text-gold">ARCHIVE</Link>
+            <Link to="/lesson-plans" className="hover:text-gold">FOR TEACHERS</Link>
+            <Link to="/terms" className="hover:text-gold">TERMS</Link>
+          </nav>
+        </div>
       </footer>
       <NotificationPrompt />
+      <InstallPrompt />
     </div>
   );
 }

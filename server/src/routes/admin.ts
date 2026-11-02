@@ -743,3 +743,62 @@ adminRouter.post("/reports/:id/resolve", async (req, res, next) => {
     next(e);
   }
 });
+
+// ──────────────────────────────────────────────────────────────────────────
+// Open Books — fixed monthly running costs (AI spend and Stripe revenue/fees
+// are recorded automatically).
+// ──────────────────────────────────────────────────────────────────────────
+
+const COST_CATEGORIES = ["hosting", "database", "email", "domain", "tools", "other"] as const;
+const monthSchema = z.string().regex(/^\d{4}-\d{2}$/);
+
+adminRouter.get("/operating-costs", async (req, res, next) => {
+  try {
+    const month = monthSchema.parse(req.query.month);
+    const costs = await prisma.operatingCost.findMany({ where: { month }, orderBy: { createdAt: "asc" } });
+    res.json({ costs, categories: COST_CATEGORIES });
+  } catch (e) {
+    next(e);
+  }
+});
+
+const costSchema = z.object({
+  month: monthSchema,
+  category: z.enum(COST_CATEGORIES),
+  label: z.string().trim().min(1).max(80),
+  amountCents: z.number().int().min(0).max(100_000_000),
+});
+
+adminRouter.post("/operating-costs", async (req, res, next) => {
+  try {
+    const data = costSchema.parse(req.body);
+    const cost = await prisma.operatingCost.create({ data });
+    res.status(201).json({ cost });
+  } catch (e) {
+    next(e);
+  }
+});
+
+adminRouter.delete("/operating-costs/:id", async (req, res, next) => {
+  try {
+    await prisma.operatingCost.delete({ where: { id: req.params.id ?? "" } });
+    res.json({ ok: true });
+  } catch (e) {
+    next(e);
+  }
+});
+
+/** Copy last month's fixed costs into a new month (most bills repeat). */
+adminRouter.post("/operating-costs/copy", async (req, res, next) => {
+  try {
+    const { from, to } = z.object({ from: monthSchema, to: monthSchema }).parse(req.body);
+    const source = await prisma.operatingCost.findMany({ where: { month: from } });
+    if (source.length === 0) throw new HttpError(404, `No costs recorded for ${from}`, "not_found");
+    await prisma.operatingCost.createMany({
+      data: source.map((c) => ({ month: to, category: c.category, label: c.label, amountCents: c.amountCents })),
+    });
+    res.json({ copied: source.length });
+  } catch (e) {
+    next(e);
+  }
+});

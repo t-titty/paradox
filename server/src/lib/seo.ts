@@ -78,6 +78,7 @@ export function registerSeoRoutes(app: Express, indexHtmlPath: string): void {
         `${base()}/paradoxes`,
         `${base()}/archive`,
         `${base()}/tribe-wars`,
+        `${base()}/open-books`,
         ...rows.map((r) => `${base()}/p/${ymd(r.airDate!)}`),
       ];
       res
@@ -128,6 +129,8 @@ export function registerSeoRoutes(app: Express, indexHtmlPath: string): void {
     ["/tribe-wars", "PARADOX — Tribe Wars"],
     ["/how-to-play", "PARADOX — How to play"],
     ["/archive", "PARADOX — The Global Archive"],
+    ["/open-books", "PARADOX — Open Books: what it costs and where the money goes"],
+    ["/support", "PARADOX — Keep it free: become a Supporter"],
   ] as const) {
     app.get(path, (_req, res) => send(res, { title, description: DEFAULT_DESCRIPTION, url: `${base()}${path}` }));
   }

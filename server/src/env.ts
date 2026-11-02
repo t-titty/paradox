@@ -38,6 +38,14 @@ const schema = z.object({
   // Effort for the fast model ("low" | "medium" | ...). Empty = omit the
   // parameter (for models that don't support effort).
   ORACLE_FAST_EFFORT: z.string().default("low"),
+  // Optional per-model price overrides for the Open Books cost math (JSON:
+  // {"model-id":{"input":USD_per_MTok,"output":USD_per_MTok}}).
+  AI_PRICES_JSON: z
+    .string()
+    .optional()
+    .transform((v) => (v && v.length > 0 ? v : undefined)),
+  // AI spars per day for players who aren't Supporters.
+  FREE_SPARS_PER_DAY: z.coerce.number().int().min(0).default(1),
   // Model that plays the AI sparring partner. Defaults to ANTHROPIC_MODEL.
   SPAR_MODEL: z
     .string()

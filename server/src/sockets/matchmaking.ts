@@ -299,7 +299,8 @@ function toEntrant(e: QueueEntry): DuelEntrant {
 /**
  * Duel the AI sparring partner on today's paradox. The partner comes from
  * the tribe most opposed to the player's and defends the other option.
- * The first spar of the day is scored at half rate; later ones are for fun.
+ * The first spar of the day is scored at half rate; later ones (Supporters
+ * only, beyond the free allowance) are unscored.
  */
 export async function handleSpar(io: Io, userId: string, username: string, socketId: string): Promise<void> {
   if (resumeIfInDuel(io, userId, socketId)) return;
@@ -308,9 +309,20 @@ export async function handleSpar(io: Io, userId: string, username: string, socke
   if (!elig) return;
   const { paradox, vote } = elig;
 
-  const priorSpars = await prisma.duel.count({
-    where: { userAId: userId, paradoxId: paradox.id, kind: "spar" },
-  });
+  const [priorSpars, me] = await Promise.all([
+    prisma.duel.count({ where: { userAId: userId, paradoxId: paradox.id, kind: "spar" } }),
+    prisma.user.findUnique({ where: { id: userId }, select: { isPremium: true } }),
+  ]);
+  // The AI partner is the one part of the game that costs real money per
+  // use, so free players get FREE_SPARS_PER_DAY; Supporters spar without limit.
+  if (!me?.isPremium && priorSpars >= env.FREE_SPARS_PER_DAY) {
+    io.sockets.sockets.get(socketId)?.emit("duel:error", {
+      code: "spar_limit",
+      message:
+        "You've used today's free spar. Duel a human any time — or become a Supporter for unlimited spars.",
+    });
+    return;
+  }
 
   const aiTribe = sparringTribeFor(vote.tribeAssigned);
   const bot = await ensureBotUser(aiTribe);

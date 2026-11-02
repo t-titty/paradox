@@ -49,6 +49,7 @@ export function Header() {
             )}
             {user?.isAdmin && <Nav to="/party">COLOSSEUM</Nav>}
             {user && <Nav to="/feedback">FEEDBACK</Nav>}
+            <Nav to="/support">{user?.isPremium ? "★ SUPPORTER" : "SUPPORT"}</Nav>
             {user?.isAdmin && <Nav to="/admin">ADMIN</Nav>}
           </nav>
           {user && <UserStats user={user} onLogout={logout} />}
@@ -100,6 +101,8 @@ export function Header() {
               <MobileNav to="/party" onClick={closeMenu}>COLOSSEUM</MobileNav>
             )}
             {user && <MobileNav to="/feedback" onClick={closeMenu}>FEEDBACK</MobileNav>}
+            <MobileNav to="/support" onClick={closeMenu}>{user?.isPremium ? "★ SUPPORTER" : "SUPPORT"}</MobileNav>
+            <MobileNav to="/open-books" onClick={closeMenu}>OPEN BOOKS</MobileNav>
             {user?.isAdmin && <MobileNav to="/admin" onClick={closeMenu}>ADMIN</MobileNav>}
           </nav>
           {user && (

@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import { env } from "../env.js";
+import { recordAiUsage } from "./aiUsage.js";
 
 /**
  * The Oracle analyses each Crucible-phase message for logical fallacies or
@@ -124,6 +125,7 @@ export async function analyzeMessage(
 
   try {
     const response = await client.messages.create(params);
+    recordAiUsage("fallacy", params.model, response.usage);
 
     const raw = response.content
       .filter((b): b is Anthropic.TextBlock => b.type === "text")

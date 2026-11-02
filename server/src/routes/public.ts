@@ -7,6 +7,8 @@ import { TRIBES, type TribeName } from "../lib/oracle.js";
 import { paradoxNumber, paradoxResults } from "../lib/results.js";
 import { addDaysYmd, weekStartYmd } from "../lib/time.js";
 import { PRACTICE_CATEGORY } from "../lib/schedule.js";
+import { availableMonths, computeBooks, currentMonth } from "../lib/openBooks.js";
+import { SUPPORTER_PLANS, estimateStripeFeeCents } from "../lib/pricing.js";
 
 /**
  * Public, logged-out pages: past dilemmas with their results, the daily
@@ -205,3 +207,27 @@ async function tribeWarsFor(fromYmd: string, toYmd: string) {
     })
     .sort((a, b) => b.score - a.score || b.members - a.members);
 }
+
+/**
+ * GET /api/public/open-books?month=YYYY-MM — the month's costs, income and
+ * profit, plus the Supporter plan prices and what Stripe keeps of each.
+ */
+publicRouter.get("/open-books", async (req, res, next) => {
+  try {
+    const month =
+      typeof req.query.month === "string" && /^\d{4}-\d{2}$/.test(req.query.month)
+        ? req.query.month
+        : currentMonth();
+    const [books, months] = await Promise.all([computeBooks(month), availableMonths()]);
+    res.json({
+      books,
+      months,
+      plans: SUPPORTER_PLANS.map((p) => {
+        const cents = Math.round(p.amountUsd * 100);
+        return { ...p, stripeFeeCents: estimateStripeFeeCents(cents) };
+      }),
+    });
+  } catch (e) {
+    next(e);
+  }
+});

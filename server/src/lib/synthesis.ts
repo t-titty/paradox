@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { env } from "../env.js";
 import type { DuelMessageEntry } from "../sockets/duelRegistry.js";
+import { recordAiUsage } from "./aiUsage.js";
 
 const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
 
@@ -78,6 +79,7 @@ export async function generateSynthesis(args: SynthesisArgs): Promise<SynthesisR
       ],
       messages: [{ role: "user", content: userMessage }],
     });
+    recordAiUsage("synthesis", env.ANTHROPIC_MODEL, response.usage);
 
     const text = response.content
       .filter((b): b is Anthropic.TextBlock => b.type === "text")

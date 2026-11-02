@@ -34,6 +34,17 @@ opponent ever sees them.
 - **Civility (0–100)**: ad hominem −10, ghosting a duel −20, skipping the Bridge −5,
   clean duels +2. At 40 or below you're matched only with other low-civility players.
 
+## Money: free game, Supporters, Open Books
+
+- The daily game is free. The optional **Supporter** plan ($3/month or $24/year,
+  `SUPPORTER_PLANS` in `server/src/lib/pricing.ts`) unlocks unlimited AI spars
+  (free players get `FREE_SPARS_PER_DAY`) and a profile badge.
+- **Open Books** (`/open-books`) publishes each month's costs, income and profit:
+  - AI cost is metered on every Anthropic call (`lib/aiUsage.ts`, prices in `lib/aiPricing.ts`).
+  - Revenue, refunds and Stripe's actual fees come from `charge.succeeded` / `charge.refunded` webhooks.
+  - Fixed bills (hosting, database, domain...) are entered in Admin → Open Books.
+- After changing prices run `npm --workspace server run stripe:sync`.
+
 ## Repository layout
 
 ```

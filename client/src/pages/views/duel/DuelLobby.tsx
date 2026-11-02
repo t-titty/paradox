@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import type { MatchmakingStatus } from "../../../lib/duelTypes.ts";
 
 interface Props {
@@ -53,7 +54,12 @@ export function DuelLobby({ status, banner, onJoin, onLeave, onSpar }: Props) {
         </ol>
         <p className="mt-4 text-muted">
           No human opposite around? Spar with the Oracle's partner — an AI from the tribe most
-          opposed to yours. Your first spar each day scores at half rate.
+          opposed to yours. Your first spar each day scores at half rate. Free players get one spar a
+          day;{" "}
+          <Link to="/support" className="text-gold underline">
+            Supporters
+          </Link>{" "}
+          spar without limit.
         </p>
       </section>
     </div>

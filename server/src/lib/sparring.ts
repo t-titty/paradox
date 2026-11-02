@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { env } from "../env.js";
 import type { CombatMode } from "./duelPhases.js";
 import type { TribeName } from "./oracle.js";
+import { recordAiUsage } from "./aiUsage.js";
 
 /**
  * The AI sparring partner. When no human opposite is available (or a new
@@ -69,6 +70,7 @@ async function complete(userContent: string): Promise<string | null> {
       system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
       messages: [{ role: "user", content: userContent }],
     });
+    recordAiUsage("spar", env.SPAR_MODEL ?? env.ANTHROPIC_MODEL, response.usage);
     if ((response.stop_reason as string) === "refusal") return null;
     const text = response.content
       .filter((b): b is Anthropic.TextBlock => b.type === "text")

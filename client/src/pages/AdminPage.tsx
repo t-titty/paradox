@@ -9,6 +9,7 @@ type Tab =
   | "feedback"
   | "users"
   | "reports"
+  | "books"
   | "developer";
 
 interface Stats {
@@ -99,6 +100,7 @@ export function AdminPage() {
         <TabBtn active={tab === "feedback"} onClick={() => setTab("feedback")}>FEEDBACK</TabBtn>
         <TabBtn active={tab === "users"} onClick={() => setTab("users")}>USERS</TabBtn>
         <TabBtn active={tab === "reports"} onClick={() => setTab("reports")}>REPORTS</TabBtn>
+        <TabBtn active={tab === "books"} onClick={() => setTab("books")}>OPEN BOOKS</TabBtn>
         <TabBtn active={tab === "developer"} onClick={() => setTab("developer")}>DEVELOPER</TabBtn>
       </nav>
 
@@ -113,6 +115,7 @@ export function AdminPage() {
         </div>
       )}
       {tab === "reports" && <ReportsPanel />}
+      {tab === "books" && <OpenBooksAdminPanel />}
       {tab === "developer" && <DeveloperPanel />}
     </div>
   );
@@ -626,6 +629,159 @@ function ReportsPanel() {
           )}
         </article>
       ))}
+    </div>
+  );
+}
+
+interface OperatingCostRow {
+  id: string;
+  month: string;
+  category: string;
+  label: string;
+  amountCents: number;
+}
+
+function prevMonth(m: string): string {
+  const [y, mo] = m.split("-").map(Number);
+  const d = new Date(Date.UTC(y!, mo! - 2, 1));
+  return d.toISOString().slice(0, 7);
+}
+
+/**
+ * Fixed monthly running costs for the public Open Books page. AI spend and
+ * Stripe revenue/fees are recorded automatically — only bills go here.
+ */
+function OpenBooksAdminPanel() {
+  const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const [rows, setRows] = useState<OperatingCostRow[] | null>(null);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [category, setCategory] = useState("hosting");
+  const [label, setLabel] = useState("");
+  const [amount, setAmount] = useState("");
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    api
+      .get<{ costs: OperatingCostRow[]; categories: string[] }>("/admin/operating-costs", { params: { month } })
+      .then((r) => {
+        setRows(r.data.costs);
+        setCategories(r.data.categories);
+      })
+      .catch((e) => setMsg(errorMessage(e, "Could not load costs.")));
+  }, [month]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function add(e: FormEvent) {
+    e.preventDefault();
+    setMsg(null);
+    const cents = Math.round(parseFloat(amount) * 100);
+    if (!label.trim() || !Number.isFinite(cents) || cents < 0) {
+      setMsg("Enter a label and a dollar amount.");
+      return;
+    }
+    try {
+      await api.post("/admin/operating-costs", { month, category, label: label.trim(), amountCents: cents });
+      setLabel("");
+      setAmount("");
+      load();
+    } catch (err) {
+      setMsg(errorMessage(err, "Could not save."));
+    }
+  }
+
+  async function remove(id: string) {
+    await api.delete(`/admin/operating-costs/${id}`).catch(() => undefined);
+    load();
+  }
+
+  async function copyPrevious() {
+    setMsg(null);
+    try {
+      const { data } = await api.post<{ copied: number }>("/admin/operating-costs/copy", {
+        from: prevMonth(month),
+        to: month,
+      });
+      setMsg(`Copied ${data.copied} cost${data.copied === 1 ? "" : "s"} from ${prevMonth(month)}.`);
+      load();
+    } catch (err) {
+      setMsg(errorMessage(err, "Nothing to copy."));
+    }
+  }
+
+  const total = (rows ?? []).reduce((a, r) => a + r.amountCents, 0);
+
+  return (
+    <div className="flex flex-col gap-5">
+      <p className="font-mono text-sm text-muted">
+        Enter this month's bills (servers, database, domain, email...). AI usage and Stripe income/fees are recorded
+        automatically. Everything here is public on{" "}
+        <a href="/open-books" className="text-gold underline">
+          /open-books
+        </a>
+        .
+      </p>
+      <div className="flex flex-wrap items-center gap-3">
+        <input
+          type="month"
+          className="brutal-input w-auto"
+          value={month}
+          onChange={(e) => e.target.value && setMonth(e.target.value)}
+        />
+        <button className="brutal-btn text-xs" onClick={copyPrevious}>
+          COPY FROM {prevMonth(month)}
+        </button>
+      </div>
+      <form onSubmit={add} className="flex flex-wrap gap-2">
+        <select className="brutal-input w-auto" value={category} onChange={(e) => setCategory(e.target.value)}>
+          {categories.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
+        <input
+          className="brutal-input flex-1"
+          placeholder="Label, e.g. Railway Hobby plan"
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+        />
+        <input
+          className="brutal-input w-32"
+          placeholder="$0.00"
+          inputMode="decimal"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+        />
+        <button className="brutal-btn brutal-btn-gold">ADD</button>
+      </form>
+      {msg && <p className="font-mono text-xs text-gold">{msg}</p>}
+      {!rows && <p className="brutal-heading text-muted">LOADING...</p>}
+      {rows && rows.length === 0 && <p className="font-mono text-sm text-muted">No fixed costs entered for {month}.</p>}
+      {rows && rows.length > 0 && (
+        <ul className="flex flex-col border-2 border-smoke">
+          {rows.map((r) => (
+            <li key={r.id} className="flex items-center justify-between gap-3 border-b border-smoke px-4 py-2 font-mono text-sm">
+              <span className="text-bone">
+                <span className="text-muted">{r.category} · </span>
+                {r.label}
+              </span>
+              <span className="flex items-center gap-4">
+                <span className="text-bone">${(r.amountCents / 100).toFixed(2)}</span>
+                <button className="text-xs text-blood underline" onClick={() => remove(r.id)}>
+                  REMOVE
+                </button>
+              </span>
+            </li>
+          ))}
+          <li className="flex justify-between px-4 py-2 font-mono text-sm text-gold">
+            <span>TOTAL</span>
+            <span>${(total / 100).toFixed(2)}</span>
+          </li>
+        </ul>
+      )}
     </div>
   );
 }

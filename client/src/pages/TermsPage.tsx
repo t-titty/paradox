@@ -91,6 +91,11 @@ export function TermsPage() {
           school circle are never shown publicly.
         </p>
         <p>
+          Payments for the optional Supporter plan are handled by Stripe; we never see your card
+          number. Totals of what PARADOX earns and spends are published on the Open Books page,
+          never anything that identifies a paying player.
+        </p>
+        <p>
           We do not sell your data. We do not run ads against it. We may use aggregated,
           de-identified votes to study reasoning patterns across tribes.
         </p>

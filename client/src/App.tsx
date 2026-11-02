@@ -30,6 +30,8 @@ import { ParadoxesPage } from "./pages/ParadoxesPage.tsx";
 import { PublicParadoxPage } from "./pages/PublicParadoxPage.tsx";
 import { TribeWarsPage } from "./pages/TribeWarsPage.tsx";
 import { LessonPlansPage } from "./pages/LessonPlansPage.tsx";
+import { OpenBooksPage } from "./pages/OpenBooksPage.tsx";
+import { SupportPage } from "./pages/SupportPage.tsx";
 import { InstallPrompt } from "./components/InstallPrompt.tsx";
 
 // ProfilePage pulls in Three.js + r3f (heavy). Code-split it so only users
@@ -66,6 +68,8 @@ export default function App() {
           <Route path="/p/:date" element={<PublicParadoxPage />} />
           <Route path="/tribe-wars" element={<TribeWarsPage />} />
           <Route path="/lesson-plans" element={<LessonPlansPage />} />
+          <Route path="/open-books" element={<OpenBooksPage />} />
+          <Route path="/support" element={<SupportPage />} />
 
           {/* Admin-only (Circles + Colosseum surface is hidden from
               non-admins for now — silently redirected to home). */}
@@ -218,6 +222,8 @@ export default function App() {
             <Link to="/tribe-wars" className="hover:text-gold">TRIBE WARS</Link>
             <Link to="/archive" className="hover:text-gold">ARCHIVE</Link>
             <Link to="/lesson-plans" className="hover:text-gold">FOR TEACHERS</Link>
+            <Link to="/open-books" className="hover:text-gold">OPEN BOOKS</Link>
+            <Link to="/support" className="hover:text-gold">SUPPORT</Link>
             <Link to="/terms" className="hover:text-gold">TERMS</Link>
           </nav>
         </div>

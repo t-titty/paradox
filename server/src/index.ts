@@ -24,6 +24,7 @@ import { notificationsRouter } from "./routes/notifications.js";
 import { practiceRouter } from "./routes/practice.js";
 import { streakRouter } from "./routes/streak.js";
 import { publicRouter } from "./routes/public.js";
+import { supportRouter } from "./routes/support.js";
 import { registerSeoRoutes } from "./lib/seo.js";
 import { errorHandler } from "./middleware/error.js";
 import { createSocketServer } from "./sockets/index.js";
@@ -64,6 +65,7 @@ app.use("/api/notifications", notificationsRouter);
 app.use("/api/practice", practiceRouter);
 app.use("/api/streak", streakRouter);
 app.use("/api/public", publicRouter);
+app.use("/api/support", supportRouter);
 
 // In production, serve the built client from the same origin. The client
 // is built to client/dist; at runtime this file is server/dist/index.js,

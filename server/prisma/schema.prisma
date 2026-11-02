@@ -96,6 +96,14 @@ model User {
   partyProStripeSubscriptionId String?   @unique
   partyProStripePriceLookupKey String?
   partyProCurrentPeriodEnd     DateTime?
+  // Supporter plan — the optional subscription that funds the free game.
+  // `isPremium` mirrors "supporter is active" so existing premium checks work.
+  supporterStatus               String    @default("none")
+  supporterPlan                 String?   // "monthly" | "annual"
+  supporterStripeCustomerId     String?
+  supporterStripeSubscriptionId String?   @unique
+  supporterCurrentPeriodEnd     DateTime?
+  supporterSince                DateTime?
   // System-owned accounts that play the AI sparring partner. Never able to
   // log in (random unusable password) and excluded from public listings.
   isBot          Boolean  @default(false)
@@ -595,4 +603,60 @@ model DuelReport {
 
   @@index([status, createdAt])
   @@index([reportedId])
+}
+
+// ─── Open Books ──────────────────────────────────────────────────────────
+// Everything the public /open-books page reports comes from these tables.
+
+// AI spend, rolled up per UTC day × role × model. Every Anthropic call adds
+// its token usage and the cost computed from lib/aiPricing.ts.
+model AiUsageDaily {
+  id               String   @id @default(cuid())
+  date             DateTime @db.Date
+  role             String   // "sort" | "fallacy" | "synthesis" | "spar"
+  model            String
+  calls            Int      @default(0)
+  inputTokens      Int      @default(0)
+  outputTokens     Int      @default(0)
+  cacheReadTokens  Int      @default(0)
+  cacheWriteTokens Int      @default(0)
+  // Millionths of a US dollar, so sub-cent calls add up exactly.
+  costMicros       BigInt   @default(0)
+  updatedAt        DateTime @updatedAt
+
+  @@unique([date, role, model])
+  @@index([date])
+}
+
+// Fixed monthly running costs entered by an admin (hosting, database,
+// domain, email...). `month` is "YYYY-MM".
+model OperatingCost {
+  id          String   @id @default(cuid())
+  month       String
+  category    String   // "hosting" | "database" | "email" | "domain" | "tools" | "other"
+  label       String
+  amountCents Int
+  createdAt   DateTime @default(now())
+
+  @@index([month])
+}
+
+// One row per successful Stripe charge, with Stripe's actual fee. The
+// source (supporter / circle / colosseum) is resolved from the customer id
+// when the books are computed, so charge events can arrive in any order.
+model RevenueEvent {
+  id             String   @id @default(cuid())
+  stripeChargeId String   @unique
+  customerId     String?
+  occurredAt     DateTime
+  grossCents     Int
+  feeCents       Int
+  netCents       Int
+  refundedCents  Int      @default(0)
+  currency       String
+  // True when Stripe hadn't settled the fee yet and we estimated it.
+  feeEstimated   Boolean  @default(false)
+
+  @@index([occurredAt])
+  @@index([customerId])
 }

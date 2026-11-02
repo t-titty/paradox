@@ -133,7 +133,7 @@ export function ProfilePage() {
         </h1>
         <p className="mt-3 font-mono text-xs uppercase tracking-brutal text-muted">
           JOINED {joined}
-          {user.isPremium && <span className="ml-3 text-gold">· PREMIUM</span>}
+          {user.isPremium && <span className="ml-3 text-gold">· ★ SUPPORTER</span>}
         </p>
       </header>
 

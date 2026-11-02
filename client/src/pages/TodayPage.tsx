@@ -76,6 +76,7 @@ export function TodayPage() {
       nextTransitionAt={phase.nextTransitionAt}
       testMode={testMode}
       onPhaseOverride={setPhaseOverride}
+      clockOverridden={phase.clockOverridden}
     />
   );
   // When the countdown hits zero the phase has changed — refetch.

@@ -44,6 +44,23 @@ const schema = z.object({
     .string()
     .optional()
     .transform((v) => (v && v.length > 0 ? v : undefined)),
+  // Let admins force the game phase from the admin panel ("test clock").
+  // For local dev and staging only — leave unset in production.
+  ALLOW_CLOCK_OVERRIDE: z
+    .string()
+    .optional()
+    .transform((v) => v === "true" || v === "1"),
+  // Comma-separated usernames that are made admins when they register or
+  // log in. Handy for a fresh staging copy.
+  ADMIN_USERNAMES: z
+    .string()
+    .optional()
+    .transform((v) =>
+      (v ?? "")
+        .split(",")
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean),
+    ),
   // AI spars per day for players who aren't Supporters.
   FREE_SPARS_PER_DAY: z.coerce.number().int().min(0).default(1),
   // Model that plays the AI sparring partner. Defaults to ANTHROPIC_MODEL.

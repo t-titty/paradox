@@ -131,7 +131,14 @@ authRouter.post("/register", async (req, res, next) => {
 
     const hashedPassword = await bcrypt.hash(password, 12);
     const user = await prisma.user.create({
-      data: { username, email, hashedPassword, ageAttestedAt: new Date() },
+      data: {
+        username,
+        email,
+        hashedPassword,
+        ageAttestedAt: new Date(),
+        // Staging convenience: listed usernames start out as admins.
+        isAdmin: env.ADMIN_USERNAMES.includes(username.toLowerCase()),
+      },
       select: userSelect,
     });
 
@@ -153,6 +160,10 @@ authRouter.post("/login", async (req, res, next) => {
     const ok = await bcrypt.compare(password, user.hashedPassword);
     if (!ok) throw new HttpError(401, "Invalid credentials", "unauthenticated");
     if (user.isBanned) throw new HttpError(403, "Account suspended", "banned");
+    if (!user.isAdmin && env.ADMIN_USERNAMES.includes(user.username.toLowerCase())) {
+      await prisma.user.update({ where: { id: user.id }, data: { isAdmin: true } });
+      user.isAdmin = true;
+    }
 
     // Password correct. If 2FA is on, require the code before issuing a token.
     if (user.twoFactorEnabled) {

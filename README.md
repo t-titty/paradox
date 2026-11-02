@@ -64,13 +64,12 @@ Key server pieces:
 ## Running locally
 
 ```bash
-cp .env.example server/.env    # then fill in JWT_SECRET and ANTHROPIC_API_KEY
-npm install
-npm run db:up                  # Postgres via docker compose
-npm run db:migrate
-npm run db:seed
-npm run dev                    # server :4000, client :5173
+npm run setup    # asks for your Anthropic key, creates server/.env, starts Postgres, migrates, seeds
+npm run dev      # server :4000, client :5173
 ```
+
+See [TESTING.md](TESTING.md) for play-testing (alone or with friends on a staging copy) and the
+admin **Test clock**.
 
 Set `PHASE_OVERRIDE=vow|sort|duel|bridge` to force a phase while developing. Admins
 can also toggle Test Mode from the admin panel.

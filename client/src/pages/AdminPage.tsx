@@ -1277,6 +1277,91 @@ function GlobalLateVowGrantPanel({
 // DEVELOPER CONTROLS
 // ─────────────────────────────────────────────────────────────────────────
 
+/**
+ * Test clock: force the whole game into one phase for every player, so a
+ * group of testers can play the vow → sort → duel loop at any hour.
+ * Only works where the server sets ALLOW_CLOCK_OVERRIDE=true (dev/staging).
+ */
+function TestClockPanel() {
+  const [state, setState] = useState<{ available: boolean; override: string | null; phase: { phase: string } } | null>(
+    null,
+  );
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    api
+      .get("/admin/clock")
+      .then((r) => setState(r.data))
+      .catch((e) => setErr(errorMessage(e, "Could not load the test clock.")));
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function set(phase: string) {
+    setBusy(true);
+    setErr(null);
+    try {
+      await api.post("/admin/clock", { phase });
+      load();
+    } catch (e) {
+      setErr(errorMessage(e, "Could not set the clock."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const options: { key: string; label: string; hint: string }[] = [
+    { key: "vow", label: "VOW", hint: "Everyone can vote on today's dilemma" },
+    { key: "sort", label: "SORT + ARENA", hint: "Results, duels, AI spars, late vows" },
+    { key: "duel", label: "PRIME-TIME DUEL", hint: "Same as arena, evening wording" },
+    { key: "bridge", label: "OVERNIGHT", hint: "Countdown to the next drop + highlights" },
+    { key: "off", label: "REAL CLOCK", hint: "Back to the real schedule" },
+  ];
+
+  return (
+    <section>
+      <p className="font-mono text-xs uppercase tracking-brutal text-muted">TEST CLOCK · EVERY PLAYER</p>
+      <div className="mt-2 border-2 border-bone p-4 md:p-5">
+        {!state ? (
+          <p className="font-mono text-sm text-muted">{err ?? "LOADING..."}</p>
+        ) : !state.available ? (
+          <p className="font-mono text-sm text-muted">
+            Disabled on this server. Set <span className="text-gold">ALLOW_CLOCK_OVERRIDE=true</span> on a local or
+            staging copy to use it. Never enable it on the live game.
+          </p>
+        ) : (
+          <>
+            <p className="font-mono text-sm text-bone">
+              Current phase: <span className="text-gold">{state.phase.phase.toUpperCase()}</span>
+              {state.override ? " (forced)" : " (real clock)"}. Changes apply to everyone within a few seconds —
+              players refresh the page to see it.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {options.map((o) => (
+                <button
+                  key={o.key}
+                  title={o.hint}
+                  disabled={busy}
+                  onClick={() => set(o.key)}
+                  className={`brutal-btn text-xs ${
+                    (state.override ?? "off") === o.key ? "brutal-btn-gold" : ""
+                  }`}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+            {err && <p className="mt-3 font-mono text-xs text-blood">{err}</p>}
+          </>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function DeveloperPanel() {
   const [systemTestMode, setSystemTestMode] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
@@ -1328,6 +1413,7 @@ function DeveloperPanel() {
 
   return (
     <div className="flex flex-col gap-6">
+      <TestClockPanel />
       <section>
         <p className="font-mono text-xs uppercase tracking-brutal text-muted">
           SYSTEM TEST MODE

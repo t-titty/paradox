@@ -4,6 +4,13 @@ import { prisma } from "../db.js";
 import { requireAdmin, type AuthedRequest } from "../middleware/auth.js";
 import { HttpError } from "../middleware/error.js";
 import { parseYmd, resolvePhase, ymd } from "../phases.js";
+import { env } from "../env.js";
+import {
+  CLOCK_PHASES,
+  refreshClockOverride,
+  runtimeClockOverride,
+  setClockOverride,
+} from "../lib/clockOverride.js";
 import {
   TEST_MODE_SETTING_KEY,
   systemTestModeEnabled,
@@ -798,6 +805,36 @@ adminRouter.post("/operating-costs/copy", async (req, res, next) => {
       data: source.map((c) => ({ month: to, category: c.category, label: c.label, amountCents: c.amountCents })),
     });
     res.json({ copied: source.length });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// Test clock — force the game phase for everyone (staging / dev only).
+// ──────────────────────────────────────────────────────────────────────────
+
+adminRouter.get("/clock", async (_req, res, next) => {
+  try {
+    await refreshClockOverride();
+    res.json({
+      available: env.ALLOW_CLOCK_OVERRIDE,
+      override: runtimeClockOverride(),
+      phase: resolvePhase(),
+    });
+  } catch (e) {
+    next(e);
+  }
+});
+
+adminRouter.post("/clock", async (req, res, next) => {
+  try {
+    if (!env.ALLOW_CLOCK_OVERRIDE) {
+      throw new HttpError(403, "The test clock is disabled on this server (ALLOW_CLOCK_OVERRIDE).", "clock_disabled");
+    }
+    const { phase } = z.object({ phase: z.enum([...CLOCK_PHASES, "off"]) }).parse(req.body);
+    await setClockOverride(phase === "off" ? null : phase);
+    res.json({ override: runtimeClockOverride(), phase: resolvePhase() });
   } catch (e) {
     next(e);
   }

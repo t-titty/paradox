@@ -26,6 +26,8 @@ export interface PhaseState {
   nextDropAt: string;
   testMode: boolean;
   schedule: PhaseSchedule;
+  /** The phase is forced by the admin test clock (staging / dev). */
+  clockOverridden?: boolean;
 }
 
 export interface StreakSummary {

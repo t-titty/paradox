@@ -32,6 +32,7 @@ import { startNotificationScheduler } from "./lib/notificationScheduler.js";
 import { startGameScheduler } from "./lib/gameScheduler.js";
 import { recoverDuels } from "./sockets/duelRecovery.js";
 import { markShuttingDown } from "./sockets/duel.js";
+import { refreshClockOverride, startClockOverrideSync } from "./lib/clockOverride.js";
 
 const app = express();
 
@@ -93,7 +94,9 @@ const io = createSocketServer(httpServer);
 
 // Rebuild any duels that were live when the previous process stopped,
 // *before* accepting connections so reconnecting players land back in them.
-recoverDuels(io)
+refreshClockOverride()
+  .catch(() => undefined)
+  .then(() => recoverDuels(io))
   .catch((e) => console.error("[paradox] duel recovery failed:", e))
   .finally(() => {
     httpServer.listen(env.PORT, () => {
@@ -101,6 +104,7 @@ recoverDuels(io)
       // Push scheduler self-disables when VAPID isn't configured.
       startNotificationScheduler();
       startGameScheduler();
+      startClockOverrideSync();
     });
   });
 

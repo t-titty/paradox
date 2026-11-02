@@ -1,5 +1,6 @@
 import { env } from "./env.js";
 import { addDaysYmd, zonedParts, zonedTimeToUtc, zonedYmd } from "./lib/time.js";
+import { runtimeClockOverride } from "./lib/clockOverride.js";
 
 export type Phase = "drop" | "vow" | "sort" | "duel" | "bridge";
 
@@ -23,6 +24,8 @@ export interface PhaseState {
   /** True when TEST_MODE is enabled — the client uses this to unlock UI. */
   testMode: boolean;
   schedule: PhaseSchedule;
+  /** True when the phase is forced (admin test clock or PHASE_OVERRIDE). */
+  clockOverridden?: boolean;
 }
 
 export function phaseSchedule(): PhaseSchedule {
@@ -50,14 +53,17 @@ export function resolvePhase(now: Date = new Date()): PhaseState {
   const today = zonedYmd(now, tz);
   const nextDropAt = nextDrop(now, schedule).toISOString();
 
-  if (env.PHASE_OVERRIDE) {
+  // Admin test clock (staging/dev only) wins over the env override.
+  const override = runtimeClockOverride() ?? env.PHASE_OVERRIDE;
+  if (override) {
     return {
-      phase: env.PHASE_OVERRIDE,
+      phase: override,
       today,
       nextTransitionAt: atHour(today, 24, tz).toISOString(),
       nextDropAt,
       testMode: env.TEST_MODE,
       schedule,
+      clockOverridden: true,
     };
   }
 

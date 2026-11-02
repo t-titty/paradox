@@ -9,6 +9,7 @@ import {
   handleSpar,
 } from "./matchmaking.js";
 import { registerDuelHandlers, userRoom } from "./duel.js";
+import { markActivity } from "../lib/activity.js";
 import type {
   ClientToServerEvents,
   InterServerEvents,
@@ -33,6 +34,9 @@ export function createSocketServer(httpServer: HttpServer): Io {
 
   io.on("connection", (socket) => {
     const { userId, username } = socket.data;
+    markActivity();
+    // Any real socket event counts as activity (keep-alive pings don't).
+    socket.onAny(() => markActivity());
     // Per-user room: lets the duel engine address one player directly
     // (e.g. hold the opponent's copy of a message until the Oracle rules).
     void socket.join(userRoom(userId));

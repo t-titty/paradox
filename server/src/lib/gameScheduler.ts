@@ -2,6 +2,7 @@ import { resolvePhase } from "../phases.js";
 import { ensureParadoxForDate } from "./schedule.js";
 import { sortPendingVotes } from "./sorting.js";
 import { addDaysYmd } from "./time.js";
+import { backgroundWorkAllowed } from "./activity.js";
 
 /**
  * Minute-by-minute game upkeep, independent of push notifications:
@@ -13,7 +14,7 @@ let handle: NodeJS.Timeout | null = null;
 let running = false;
 
 async function tick(): Promise<void> {
-  if (running) return;
+  if (running || !backgroundWorkAllowed()) return;
   running = true;
   try {
     const phase = resolvePhase();

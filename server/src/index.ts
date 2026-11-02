@@ -30,6 +30,7 @@ import { errorHandler } from "./middleware/error.js";
 import { createSocketServer } from "./sockets/index.js";
 import { startNotificationScheduler } from "./lib/notificationScheduler.js";
 import { startGameScheduler } from "./lib/gameScheduler.js";
+import { markActivity } from "./lib/activity.js";
 import { recoverDuels } from "./sockets/duelRecovery.js";
 import { markShuttingDown } from "./sockets/duel.js";
 import { refreshClockOverride, startClockOverrideSync } from "./lib/clockOverride.js";
@@ -43,6 +44,13 @@ app.use(cors());
 app.use("/api/webhooks/stripe", stripeWebhookRouter);
 
 app.use(express.json({ limit: "64kb" }));
+
+// Note real player activity (not health checks) so background jobs can
+// pause while nobody is playing — see lib/activity.ts.
+app.use("/api", (req, _res, next) => {
+  if (req.path !== "/health") markActivity();
+  next();
+});
 
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, env: env.NODE_ENV, testMode: env.TEST_MODE });

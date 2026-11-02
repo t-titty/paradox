@@ -1,5 +1,6 @@
 import { prisma } from "../db.js";
 import { env } from "../env.js";
+import { backgroundWorkAllowed } from "./activity.js";
 
 /**
  * Admin "test clock": force the whole game into one phase from the admin
@@ -42,6 +43,8 @@ export async function setClockOverride(phase: ClockPhase | null): Promise<void> 
 export function startClockOverrideSync(): void {
   if (!env.ALLOW_CLOCK_OVERRIDE || timer) return;
   void refreshClockOverride().catch(() => undefined);
-  timer = setInterval(() => void refreshClockOverride().catch(() => undefined), 15_000);
+  timer = setInterval(() => {
+    if (backgroundWorkAllowed()) void refreshClockOverride().catch(() => undefined);
+  }, 15_000);
   timer.unref();
 }

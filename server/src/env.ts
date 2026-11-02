@@ -28,7 +28,11 @@ const schema = z.object({
     .transform((v) => (v && v.length > 0 ? v : undefined)),
   // Public-facing URL the Stripe success/cancel pages redirect back to.
   // Defaults to localhost in dev.
-  PUBLIC_APP_URL: z.string().url().default("http://localhost:5173"),
+  // On Render this falls back to the service's own address automatically.
+  PUBLIC_APP_URL: z
+    .string()
+    .url()
+    .default(process.env.RENDER_EXTERNAL_URL || "http://localhost:5173"),
   ANTHROPIC_API_KEY: z.string().min(1),
   ANTHROPIC_MODEL: z.string().default("claude-sonnet-4-6"),
   // Small, fast model for the per-message Crucible checks (Red Flags /
@@ -61,6 +65,10 @@ const schema = z.object({
         .map((s) => s.trim().toLowerCase())
         .filter(Boolean),
     ),
+  // Pause the every-minute background jobs after this many minutes with no
+  // player activity, so a sleep-to-save database (e.g. Neon free) can sleep.
+  // 0 = never pause (default; right for an always-on host and database).
+  IDLE_PAUSE_MINUTES: z.coerce.number().int().min(0).default(0),
   // AI spars per day for players who aren't Supporters.
   FREE_SPARS_PER_DAY: z.coerce.number().int().min(0).default(1),
   // Model that plays the AI sparring partner. Defaults to ANTHROPIC_MODEL.

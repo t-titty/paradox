@@ -4,6 +4,7 @@ import { parseYmd } from "../phases.js";
 import { pushConfigured, sendPushToAll, sendPushToUser, type PushPayload } from "./push.js";
 import { computeStreakForUser } from "./streaks.js";
 import { zonedParts, zonedYmd } from "./time.js";
+import { backgroundWorkAllowed } from "./activity.js";
 
 /**
  * Phase-kickoff push notifications on the game clock (PHASE_TIMEZONE):
@@ -164,6 +165,7 @@ export function startNotificationScheduler(): void {
   }
 
   const tick = async () => {
+    if (!backgroundWorkAllowed()) return;
     const now = new Date();
     for (const window of windows()) {
       try {

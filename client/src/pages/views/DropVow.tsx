@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { api, errorMessage } from "../../lib/api.ts";
 import { validateJustification } from "../../lib/sentence.ts";
 import type { Choice, DailyTodayResponse, Paradox } from "../../lib/types.ts";
+import { formatAirDate } from "../../lib/dates.ts";
 
 interface Props {
   paradox: Paradox;
@@ -10,6 +11,10 @@ interface Props {
   onVoted: () => void;
   testMode?: boolean;
   onSortNow?: () => void;
+  /** "PARADOX #142" */
+  number?: number | null;
+  /** The Vow window has closed; this is a self-serve late vow. */
+  late?: boolean;
 }
 
 /**
@@ -17,7 +22,7 @@ interface Props {
  * the brutalist reveal that frames the voting prompt. If the user has
  * already vowed, we show the locked state — no edits allowed.
  */
-export function DropVow({ paradox, hasVoted, vote, onVoted, testMode, onSortNow }: Props) {
+export function DropVow({ paradox, hasVoted, vote, onVoted, testMode, onSortNow, number, late }: Props) {
   if (hasVoted && vote) {
     return (
       <LockedVow
@@ -29,10 +34,20 @@ export function DropVow({ paradox, hasVoted, vote, onVoted, testMode, onSortNow 
       />
     );
   }
-  return <VowForm paradox={paradox} onVoted={onVoted} />;
+  return <VowForm paradox={paradox} onVoted={onVoted} number={number} late={late} />;
 }
 
-function VowForm({ paradox, onVoted }: { paradox: Paradox; onVoted: () => void }) {
+function VowForm({
+  paradox,
+  onVoted,
+  number,
+  late,
+}: {
+  paradox: Paradox;
+  onVoted: () => void;
+  number?: number | null;
+  late?: boolean;
+}) {
   const [choice, setChoice] = useState<Choice | null>(null);
   const [justification, setJustification] = useState("");
   const [showConfirm, setShowConfirm] = useState(false);
@@ -70,8 +85,14 @@ function VowForm({ paradox, onVoted }: { paradox: Paradox; onVoted: () => void }
     <div className="mx-auto flex max-w-4xl flex-col gap-10 px-4 py-10 md:gap-12 md:px-6 md:py-16">
       <header>
         <p className="font-mono text-xs uppercase tracking-brutal text-muted">
-          {paradox.category} · {new Date(paradox.airDate).toDateString().toUpperCase()}
+          {number ? <span className="text-gold">PARADOX #{number} · </span> : null}
+          {paradox.category} · {formatAirDate(paradox.airDate)}
         </p>
+        {late && (
+          <p className="mt-3 inline-block border border-gold px-2 py-1 font-mono text-[11px] uppercase tracking-brutal text-gold">
+            LATE VOW · THE ORACLE WILL READ YOU THE MOMENT YOU SUBMIT
+          </p>
+        )}
         <h1 className="brutal-heading mt-3 text-4xl leading-tight text-bone md:text-6xl lg:text-7xl lg:leading-none">
           {paradox.title.toUpperCase()}
         </h1>
@@ -141,6 +162,7 @@ function VowForm({ paradox, onVoted }: { paradox: Paradox; onVoted: () => void }
           submitting={submitting}
           onCancel={() => setShowConfirm(false)}
           onConfirm={onConfirm}
+          late={late}
         />
       )}
     </div>
@@ -182,6 +204,7 @@ function ConfirmModal({
   submitting,
   onCancel,
   onConfirm,
+  late,
 }: {
   choice: Choice;
   choiceText: string;
@@ -189,6 +212,7 @@ function ConfirmModal({
   submitting: boolean;
   onCancel: () => void;
   onConfirm: () => void;
+  late?: boolean;
 }) {
   // Lock background scroll while the modal is open so iOS can't rubber-band
   // the page behind it (which on short viewports pushed the action buttons
@@ -219,7 +243,10 @@ function ConfirmModal({
           <p className="brutal-heading text-sm text-gold">ONE LAST LOOK.</p>
           <h2 className="brutal-heading mt-4 text-3xl text-bone">YOU CANNOT EDIT THIS.</h2>
           <p className="mt-3 font-mono text-sm text-muted">
-            Once vowed, your justification is locked for today. The Oracle will read it at noon.
+            Once vowed, your justification is locked for today.{" "}
+            {late
+              ? "The Oracle will read it the moment you submit."
+              : "The Oracle will read it when the Vow closes."}
           </p>
           <div className="mt-6 border border-smoke p-4 font-mono">
             <p className="text-xs uppercase tracking-brutal text-gold">YOUR CHOICE — {choice}</p>

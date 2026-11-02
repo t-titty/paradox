@@ -9,26 +9,41 @@ export function RegisterPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [agreed, setAgreed] = useState(false);
+  const [ageOk, setAgeOk] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [slow, setSlow] = useState(false);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    // Defensive: the button is disabled when !agreed, but double-check here
-    // so a bypassed disabled attribute can't skip the ToS requirement.
+    // The button stays clickable; explain exactly what's missing instead.
+    if (!agreed && !ageOk) {
+      setError("Tick both boxes below the password to continue.");
+      return;
+    }
     if (!agreed) {
-      setError("You must agree to the Terms of Service to register.");
+      setError("Tick the box to agree to the Terms of Service.");
+      return;
+    }
+    if (!ageOk) {
+      setError("Tick the box confirming you're 13 or older (or joining through your school).");
       return;
     }
     setError(null);
     setSubmitting(true);
+    setSlow(false);
+    // If the server is asleep (free hosting), say so instead of looking frozen.
+    const slowTimer = window.setTimeout(() => setSlow(true), 4000);
     try {
       await register(username.trim(), email.trim().toLowerCase(), password);
-      navigate("/", { replace: true });
+      // First stop for every new player: the 3-minute practice round.
+      navigate("/welcome", { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Registration failed.");
     } finally {
+      window.clearTimeout(slowTimer);
       setSubmitting(false);
+      setSlow(false);
     }
   }
 
@@ -82,12 +97,31 @@ export function RegisterPage() {
             </span>
           </label>
 
+          <label className="flex cursor-pointer items-start gap-3 font-mono text-sm text-bone">
+            <input
+              type="checkbox"
+              className="mt-1 h-5 w-5 shrink-0 cursor-pointer accent-gold"
+              checked={ageOk}
+              onChange={(e) => setAgeOk(e.target.checked)}
+            />
+            <span>
+              I am 13 or older — or I'm joining through my school with a teacher's invite code.
+            </span>
+          </label>
+
           {error && (
             <p className="border-2 border-blood p-3 font-mono text-sm text-blood">{error}</p>
           )}
-          <button className="brutal-btn brutal-btn-gold" disabled={submitting || !agreed}>
-            {submitting ? "..." : "REGISTER"}
+          {/* Always clickable: a silently disabled button reads as "broken".
+              onSubmit explains anything that's missing. */}
+          <button className="brutal-btn brutal-btn-gold" disabled={submitting}>
+            {submitting ? "CREATING YOUR ACCOUNT..." : "REGISTER"}
           </button>
+          {slow && (
+            <p className="font-mono text-xs text-gold">
+              Waking up the server — this can take up to a minute the first time. Hang tight.
+            </p>
+          )}
         </form>
         <p className="font-mono text-sm text-white">
           Have an account?{" "}

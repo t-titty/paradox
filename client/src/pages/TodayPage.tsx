@@ -1,45 +1,33 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { api, errorMessage } from "../lib/api.ts";
 import type { Phase, TodayResponse } from "../lib/types.ts";
 import { PhaseBanner } from "../components/PhaseBanner.tsx";
-import { CountdownTimer, getClockWindow } from "../components/CountdownTimer.tsx";
+import { CountdownTimer } from "../components/CountdownTimer.tsx";
+import { HighlightsPanel } from "../components/HighlightsPanel.tsx";
+import { StreakChip } from "../components/StreakChip.tsx";
 import { DropVow } from "./views/DropVow.tsx";
 import { SortView } from "./views/SortView.tsx";
 import { DuelFlow } from "./views/duel/DuelFlow.tsx";
 import { Throwback } from "./views/Throwback.tsx";
 
 /**
- * Track which clock window we're in so the page can swap between the
- * fullscreen-takeover layout (00:00–08:00 and 20:00–24:00) and the
- * inline small-timer layout (08:00–20:00). We re-poll at 15s — the
- * window only changes on the hour boundaries 00/08/12/20, so 15s is
- * generous without being wasteful.
- */
-function useClockVariant(): "fullscreen" | "small" {
-  const [variant, setVariant] = useState(() => getClockWindow().variant);
-  useEffect(() => {
-    const id = window.setInterval(
-      () => setVariant(getClockWindow().variant),
-      15_000,
-    );
-    return () => window.clearInterval(id);
-  }, []);
-  return variant;
-}
-
-/**
- * The single daily entry point. Resolves the current phase server-side,
- * then mounts the correct sub-view. On eligible Thursdays, the server
- * returns a throwback payload instead of the daily paradox.
+ * The single daily entry point. The server decides the phase on the shared
+ * game clock; this page only renders it.
  *
- * In test mode, we hold a local phase override and pass it to the server
- * so all gated logic (paradox route, banner, sub-view) stays in sync.
+ *   bridge (overnight)  → fullscreen countdown to the Drop + last night's highlights
+ *   vow                 → the dilemma and the vow form (or Throwback on Thursdays)
+ *   sort / duel         → not voted yet: a late vow · voted: RESULTS and ARENA tabs
+ *
+ * The arena stays mounted while you look at your results, so a match that
+ * lands while you're reading switches you straight into the duel.
  */
 export function TodayPage() {
   const [state, setState] = useState<TodayResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [phaseOverride, setPhaseOverride] = useState<Phase | null>(null);
-  const clockVariant = useClockVariant();
+  // While a duel is live, the duel room gets the whole screen.
+  const [inDuel, setInDuel] = useState(false);
 
   async function load(override: Phase | null = phaseOverride) {
     try {
@@ -58,20 +46,15 @@ export function TodayPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phaseOverride]);
 
-  function onPhaseOverride(p: Phase) {
-    setPhaseOverride(p);
-  }
-
   if (error) {
     return (
-      <div className="mx-auto max-w-3xl p-16">
+      <div className="mx-auto max-w-3xl p-6 md:p-16">
         <div className="brutal-card-blood">
           <p className="brutal-heading text-2xl text-blood">THE ORACLE IS SILENT</p>
           <p className="mt-3 font-mono text-bone">{error}</p>
-          <p className="mt-3 font-mono text-sm text-muted">
-            If the server has no paradox for today, run{" "}
-            <code className="text-gold">npm run db:seed</code>.
-          </p>
+          <button onClick={() => load()} className="brutal-btn mt-6">
+            TRY AGAIN
+          </button>
         </div>
       </div>
     );
@@ -85,92 +68,159 @@ export function TodayPage() {
     );
   }
 
-  const testMode = state.phase.testMode;
+  const phase = state.phase;
+  const testMode = phase.testMode;
+  const banner = (
+    <PhaseBanner
+      phase={phase.phase}
+      nextTransitionAt={phase.nextTransitionAt}
+      testMode={testMode}
+      onPhaseOverride={setPhaseOverride}
+      clockOverridden={phase.clockOverridden}
+    />
+  );
+  // When the countdown hits zero the phase has changed — refetch.
+  const countdown = <CountdownTimer phase={phase} onElapsed={() => load()} />;
 
-  // During the two fullscreen windows (00:00–08:00 and 20:00–24:00) the
-  // countdown owns the page — phase content is hidden because the user
-  // is either pre-drop or past the duel window. PhaseBanner stays at the
-  // top so test-mode admins can still switch phases.
-  if (clockVariant === "fullscreen") {
+  // Overnight: the countdown owns the page, with last night's highlights below.
+  if (phase.phase === "bridge") {
     return (
       <div className="flex flex-1 flex-col">
-        <PhaseBanner
-          phase={state.phase.phase}
-          nextTransitionAt={state.phase.nextTransitionAt}
-          testMode={testMode}
-          onPhaseOverride={onPhaseOverride}
-        />
-        <CountdownTimer />
+        {banner}
+        {countdown}
+        {state.mode === "daily" && (
+          <div className="flex justify-center pb-8">
+            <StreakChip streak={state.streak} />
+          </div>
+        )}
+        <HighlightsPanel />
       </div>
     );
   }
 
-  // Small-timer windows (08:00–20:00): throwback renders during vow hours,
-  // otherwise fall through to the daily flow.
   if (state.mode === "throwback") {
     return (
       <div className="flex flex-col">
-        <PhaseBanner
-          phase={state.phase.phase}
-          nextTransitionAt={state.phase.nextTransitionAt}
-          testMode={testMode}
-          onPhaseOverride={onPhaseOverride}
-        />
-        <CountdownTimer />
+        {banner}
+        {countdown}
         <Throwback state={state} onDone={() => load()} />
       </div>
     );
   }
 
-  const { phase, paradox, hasVoted, lateVowGrant, globalLateVowActive } = state;
-  // An unused grant — individual OR global — lets the user vote even if
-  // the vow window has closed. Either way we show the voting UI.
-  const hasIndividualGrant = Boolean(lateVowGrant);
-  const canVowLate = (hasIndividualGrant || globalLateVowActive) && !hasVoted;
+  const { paradox, hasVoted, lateVowGrant, globalLateVowActive, lateVowOpen } = state;
+  const hasGrant = (Boolean(lateVowGrant) || globalLateVowActive) && !hasVoted;
+  const showVowForm = phase.phase === "vow" || phase.phase === "drop" || (!hasVoted && (lateVowOpen || hasGrant));
 
   return (
     <div className="flex flex-col">
-      <PhaseBanner
-        phase={phase.phase}
-        nextTransitionAt={phase.nextTransitionAt}
-        testMode={testMode}
-        onPhaseOverride={onPhaseOverride}
-      />
-      <CountdownTimer />
-      {canVowLate && (
-        <LateVowBanner scope={hasIndividualGrant ? "individual" : "global"} />
-      )}
-      {(phase.phase === "vow" || canVowLate) && (
-        <DropVow
-          paradox={paradox}
-          hasVoted={hasVoted}
-          vote={state.vote}
-          onVoted={() => load()}
-          testMode={testMode}
-          onSortNow={() => setPhaseOverride("sort")}
-        />
-      )}
-      {!canVowLate && phase.phase === "sort" && <SortView />}
-      {!canVowLate && phase.phase === "duel" && <DuelFlow />}
-      {!canVowLate && phase.phase === "drop" && (
+      {!inDuel && banner}
+      {!inDuel && countdown}
+      {!inDuel && state.needsOnboarding && <OnboardingNudge />}
+      {showVowForm ? (
+        <>
+          {phase.phase !== "vow" && !hasVoted && <LateVowBanner />}
+          <div className="mx-auto w-full max-w-4xl px-4 pt-6 md:px-6">
+            <StreakChip streak={state.streak} />
+          </div>
+          <DropVow
+            paradox={paradox}
+            hasVoted={hasVoted}
+            vote={state.vote}
+            onVoted={() => load()}
+            testMode={testMode}
+            onSortNow={() => setPhaseOverride("sort")}
+            number={state.paradoxNumber}
+            late={phase.phase !== "vow" && !hasVoted}
+          />
+        </>
+      ) : hasVoted && state.duelsOpen ? (
+        <ResultsAndArena defaultTab={phase.phase === "duel" ? "arena" : "results"} onInDuel={setInDuel} />
+      ) : (
         <Placeholder
-          roman="I"
-          title="THE DROP"
-          body="The paradox has been revealed. Switch to THE VOW to take a side."
+          roman="III"
+          title="THE VOW HAS CLOSED"
+          body="Come back at the next Drop to take a side."
         />
       )}
     </div>
   );
 }
 
-function LateVowBanner({ scope }: { scope: "individual" | "global" }) {
-  const msg =
-    scope === "global"
-      ? "Late vow access is open for today's paradox. Cast your vow now."
-      : "You have been granted late vow access for today's paradox. Cast your vow before midnight.";
+function ResultsAndArena({
+  defaultTab,
+  onInDuel,
+}: {
+  defaultTab: "results" | "arena";
+  onInDuel: (active: boolean) => void;
+}) {
+  const [tab, setTab] = useState<"results" | "arena">(defaultTab);
+  const [inDuel, setInDuel] = useState(false);
+
+  return (
+    <div className="flex flex-col">
+      {!inDuel && (
+        <div className="flex border-b border-smoke font-mono text-xs uppercase tracking-brutal">
+          <TabButton active={tab === "results"} onClick={() => setTab("results")}>
+            YOUR TRIBE & RESULTS
+          </TabButton>
+          <TabButton active={tab === "arena"} onClick={() => setTab("arena")}>
+            THE ARENA ⚔
+          </TabButton>
+        </div>
+      )}
+      <div className={tab === "results" && !inDuel ? "" : "hidden"}>
+        <SortView />
+      </div>
+      {/* Always mounted so matchmaking events are never missed. */}
+      <div className={tab === "arena" || inDuel ? "" : "hidden"}>
+        <DuelFlow
+          onActiveChange={(active) => {
+            setInDuel(active);
+            onInDuel(active);
+            if (active) setTab("arena");
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function TabButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex-1 px-4 py-4 ${active ? "border-b-2 border-gold text-gold" : "text-muted hover:text-bone"}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function OnboardingNudge() {
+  return (
+    <div className="border-b-2 border-gold bg-ash px-4 py-3 text-center font-mono text-xs uppercase tracking-brutal text-bone md:px-6 md:text-sm">
+      NEW HERE?{" "}
+      <Link to="/welcome" className="text-gold underline">
+        TAKE THE 3-MINUTE PRACTICE ROUND →
+      </Link>
+    </div>
+  );
+}
+
+function LateVowBanner() {
   return (
     <div className="border-b-2 border-gold bg-ink px-4 py-3 text-center font-mono text-xs uppercase tracking-brutal text-gold md:px-6 md:text-sm">
-      {msg}
+      MISSED THE VOW WINDOW? YOU CAN STILL TAKE A SIDE UNTIL MIDNIGHT — AND STILL DUEL.
     </div>
   );
 }

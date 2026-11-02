@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import type { MatchmakingStatus } from "../../../lib/duelTypes.ts";
 
 interface Props {
@@ -6,13 +7,15 @@ interface Props {
   banner: string | null;
   onJoin: () => void;
   onLeave: () => void;
+  /** Duel the AI sparring partner instead of waiting for a human. */
+  onSpar: () => void;
 }
 
 /**
  * The matchmaking antechamber. Brutalist countdown. The user sees their
  * queue state and a single live action: join, leave, or retry.
  */
-export function DuelLobby({ status, banner, onJoin, onLeave }: Props) {
+export function DuelLobby({ status, banner, onJoin, onLeave, onSpar }: Props) {
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-8 px-4 py-10 md:gap-10 md:px-6 md:py-16">
       <header>
@@ -31,7 +34,7 @@ export function DuelLobby({ status, banner, onJoin, onLeave }: Props) {
         <p className="border-2 border-blood p-3 font-mono text-sm text-blood">{banner}</p>
       )}
 
-      <StatusPanel status={status} onJoin={onJoin} onLeave={onLeave} />
+      <StatusPanel status={status} onJoin={onJoin} onLeave={onLeave} onSpar={onSpar} />
 
       <section className="border border-smoke p-6 font-mono text-sm text-muted">
         <p className="brutal-heading text-xs text-gold">HOW IT WORKS</p>
@@ -49,8 +52,25 @@ export function DuelLobby({ status, banner, onJoin, onLeave }: Props) {
             acknowledge one reasonable point made by the other.
           </li>
         </ol>
+        <p className="mt-4 text-muted">
+          No human opposite around? Spar with the Oracle's partner — an AI from the tribe most
+          opposed to yours. Your first spar each day scores at half rate. Free players get one spar a
+          day;{" "}
+          <Link to="/support" className="text-gold underline">
+            Supporters
+          </Link>{" "}
+          spar without limit.
+        </p>
       </section>
     </div>
+  );
+}
+
+function SparButton({ onSpar, primary = false }: { onSpar: () => void; primary?: boolean }) {
+  return (
+    <button onClick={onSpar} className={`brutal-btn ${primary ? "brutal-btn-gold" : ""}`}>
+      SPAR WITH THE ORACLE
+    </button>
   );
 }
 
@@ -58,10 +78,12 @@ function StatusPanel({
   status,
   onJoin,
   onLeave,
+  onSpar,
 }: {
   status: MatchmakingStatus;
   onJoin: () => void;
   onLeave: () => void;
+  onSpar: () => void;
 }) {
   if (status.state === "idle") {
     return (
@@ -70,9 +92,12 @@ function StatusPanel({
         <p className="mt-2 font-mono text-bone">
           Enter the queue. You'll be matched with someone from an opposing tribe.
         </p>
-        <button onClick={onJoin} className="brutal-btn brutal-btn-gold mt-6">
-          ENTER THE QUEUE
-        </button>
+        <div className="mt-6 flex flex-wrap gap-3">
+          <button onClick={onJoin} className="brutal-btn brutal-btn-gold">
+            ENTER THE QUEUE
+          </button>
+          <SparButton onSpar={onSpar} />
+        </div>
       </div>
     );
   }
@@ -84,6 +109,7 @@ function StatusPanel({
         queueSize={status.queueSize}
         echoChamber={status.echoChamber}
         onLeave={onLeave}
+        onSpar={onSpar}
       />
     );
   }
@@ -100,13 +126,17 @@ function StatusPanel({
   if (status.state === "timeout") {
     return (
       <div className="brutal-card-blood">
-        <p className="brutal-heading text-sm text-blood">NO OPPOSITE FOUND.</p>
+        <p className="brutal-heading text-sm text-blood">NO HUMAN OPPOSITE FOUND.</p>
         <p className="mt-2 font-mono text-bone">
-          The queue is thin right now. Try again — or come back at a busier hour.
+          The arena is quiet right now. Spar with the Oracle's partner — an AI from the tribe
+          most opposed to yours — or try the queue again.
         </p>
-        <button onClick={onJoin} className="brutal-btn brutal-btn-gold mt-6">
-          TRY AGAIN
-        </button>
+        <div className="mt-6 flex flex-wrap gap-3">
+          {status.sparAvailable && <SparButton onSpar={onSpar} primary />}
+          <button onClick={onJoin} className="brutal-btn">
+            TRY THE QUEUE AGAIN
+          </button>
+        </div>
       </div>
     );
   }
@@ -125,11 +155,13 @@ function QueuedPanel({
   queueSize,
   echoChamber,
   onLeave,
+  onSpar,
 }: {
   since: string;
   queueSize: number;
   echoChamber: boolean;
   onLeave: () => void;
+  onSpar: () => void;
 }) {
   const [elapsed, setElapsed] = useState(() => Math.max(0, Date.now() - new Date(since).getTime()));
 
@@ -163,9 +195,12 @@ function QueuedPanel({
       <p className="mt-3 font-mono text-xs uppercase tracking-brutal text-muted">
         {queueSize} IN QUEUE · TIMEOUT IN {Math.max(0, 120 - secs)}S
       </p>
-      <button onClick={onLeave} className="brutal-btn mt-6">
-        LEAVE QUEUE
-      </button>
+      <div className="mt-6 flex flex-wrap gap-3">
+        <button onClick={onLeave} className="brutal-btn">
+          LEAVE QUEUE
+        </button>
+        {secs >= 30 && <SparButton onSpar={onSpar} />}
+      </div>
     </div>
   );
 }

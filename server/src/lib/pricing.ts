@@ -420,3 +420,36 @@ export function resolveFeatureLookupKey(
 ): FeaturePlan | undefined {
   return FEATURE_PLANS.find((p) => featureLookupKey(p.key) === lookupKey);
 }
+
+/* ---------- Supporter plan (funds the free game) ---------- */
+
+/**
+ * The optional subscription that pays for PARADOX. The daily game stays
+ * free for everyone; supporters get unlimited AI spars and a profile badge,
+ * and every dollar is accounted for on the public Open Books page.
+ *
+ * Annual is the better deal for players *and* for the books: Stripe's fixed
+ * 30¢ per charge is ~10% of a $3 monthly payment but ~1% of an annual one.
+ */
+export type SupporterBilling = "monthly" | "annual";
+
+export interface SupporterPlan {
+  key: string;
+  billing: SupporterBilling;
+  amountUsd: number;
+  label: string;
+}
+
+export const SUPPORTER_PLANS: SupporterPlan[] = [
+  { key: "SUPPORTER_MONTHLY", billing: "monthly", amountUsd: 3, label: "$3 / month" },
+  { key: "SUPPORTER_ANNUAL", billing: "annual", amountUsd: 24, label: "$24 / year" },
+];
+
+export function resolveSupporterLookupKey(lookupKey: string): SupporterPlan | undefined {
+  return SUPPORTER_PLANS.find((p) => p.key === lookupKey);
+}
+
+/** Stripe's standard US card fee: 2.9% + 30¢. Used for estimates only. */
+export function estimateStripeFeeCents(grossCents: number): number {
+  return Math.round(grossCents * 0.029) + 30;
+}

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, errorMessage } from "../lib/api.ts";
 import { useAuth } from "../context/AuthContext.tsx";
+import { CircleDashboard } from "../components/CircleDashboard.tsx";
 
 /* ---------- types (mirror the server router) ---------- */
 
@@ -428,6 +429,8 @@ function CircleDetailView({ circleId }: { circleId: string }) {
           <span className="text-gold">{circle.subscriptionStatus.toUpperCase()}</span>
         </p>
       </div>
+
+      {viewer.isManager && <CircleDashboard circleId={circle.id} />}
 
       <section className="flex flex-col gap-4">
         <div className="flex flex-wrap items-baseline justify-between gap-3 border-b-2 border-smoke pb-3">

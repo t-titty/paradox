@@ -17,6 +17,25 @@ export const DUEL_DURATION_MS = 10 * 60 * 1000;
 export const CLARIFICATION_END_MS = 3 * 60 * 1000;
 export const CRUCIBLE_END_MS = 8 * 60 * 1000;
 
+/** Per-duel mode boundaries. Practice spars run a compressed 4-minute clock. */
+export interface DuelTiming {
+  clarificationEndMs: number;
+  crucibleEndMs: number;
+  durationMs: number;
+}
+
+export const STANDARD_TIMING: DuelTiming = {
+  clarificationEndMs: CLARIFICATION_END_MS,
+  crucibleEndMs: CRUCIBLE_END_MS,
+  durationMs: DUEL_DURATION_MS,
+};
+
+export const PRACTICE_TIMING: DuelTiming = {
+  clarificationEndMs: 1 * 60 * 1000,
+  crucibleEndMs: 3 * 60 * 1000,
+  durationMs: 4 * 60 * 1000,
+};
+
 export interface ModeSnapshot {
   mode: CombatMode;
   /** Ms elapsed since duel start. */
@@ -29,25 +48,29 @@ export interface ModeSnapshot {
   duelEndsAt: string;
 }
 
-export function resolveMode(startedAt: Date, now: Date = new Date()): ModeSnapshot {
+export function resolveMode(
+  startedAt: Date,
+  now: Date = new Date(),
+  timing: DuelTiming = STANDARD_TIMING,
+): ModeSnapshot {
   const elapsedMs = Math.max(0, now.getTime() - startedAt.getTime());
-  const duelEndsAt = new Date(startedAt.getTime() + DUEL_DURATION_MS);
+  const duelEndsAt = new Date(startedAt.getTime() + timing.durationMs);
 
   let mode: CombatMode;
   let nextBoundary: number;
 
-  if (elapsedMs >= DUEL_DURATION_MS) {
+  if (elapsedMs >= timing.durationMs) {
     mode = "over";
-    nextBoundary = DUEL_DURATION_MS;
-  } else if (elapsedMs < CLARIFICATION_END_MS) {
+    nextBoundary = timing.durationMs;
+  } else if (elapsedMs < timing.clarificationEndMs) {
     mode = "clarification";
-    nextBoundary = CLARIFICATION_END_MS;
-  } else if (elapsedMs < CRUCIBLE_END_MS) {
+    nextBoundary = timing.clarificationEndMs;
+  } else if (elapsedMs < timing.crucibleEndMs) {
     mode = "crucible";
-    nextBoundary = CRUCIBLE_END_MS;
+    nextBoundary = timing.crucibleEndMs;
   } else {
     mode = "bridge";
-    nextBoundary = DUEL_DURATION_MS;
+    nextBoundary = timing.durationMs;
   }
 
   const msUntilNextTransition = Math.max(0, nextBoundary - elapsedMs);

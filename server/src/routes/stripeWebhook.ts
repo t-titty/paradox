@@ -3,7 +3,12 @@ import type Stripe from "stripe";
 import { prisma } from "../db.js";
 import { env } from "../env.js";
 import { getStripe } from "../lib/stripe.js";
-import { resolveLookupKey, resolveFeatureLookupKey } from "../lib/pricing.js";
+import {
+  estimateStripeFeeCents,
+  resolveFeatureLookupKey,
+  resolveLookupKey,
+  resolveSupporterLookupKey,
+} from "../lib/pricing.js";
 
 /**
  * Stripe webhook router. MUST be mounted before `express.json()` so the raw
@@ -15,6 +20,8 @@ import { resolveLookupKey, resolveFeatureLookupKey } from "../lib/pricing.js";
  *   customer.subscription.updated — sync status + period end
  *   customer.subscription.deleted — mark canceled
  *   invoice.payment_failed       — mark past_due
+ *   charge.succeeded             — record revenue + Stripe's fee (Open Books)
+ *   charge.refunded              — record refunds (Open Books)
  *
  * Idempotency: every path keys off `stripeSubscriptionId` (unique on Circle),
  * so duplicate deliveries land as no-ops. A Circle is only created for a
@@ -64,6 +71,12 @@ stripeWebhookRouter.post(
           break;
         case "invoice.payment_failed":
           await onInvoicePaymentFailed(event.data.object as Stripe.Invoice);
+          break;
+        case "charge.succeeded":
+          await onChargeSucceeded(event.data.object as Stripe.Charge);
+          break;
+        case "charge.refunded":
+          await onChargeRefunded(event.data.object as Stripe.Charge);
           break;
         default:
           // Every other event type is acknowledged but ignored.
@@ -136,6 +149,32 @@ async function onCheckoutCompleted(session: Stripe.Checkout.Session) {
   }
 
   const stripe = getStripe()!;
+
+  // Branch 0: Supporter plan (user-level, funds the free game).
+  const supporter = resolveSupporterLookupKey(priceLookupKey);
+  if (supporter) {
+    const already = await prisma.user.findFirst({
+      where: { supporterStripeSubscriptionId: subscriptionId },
+      select: { id: true },
+    });
+    if (already) return;
+    const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+    const periodEnd = subCurrentPeriodEnd(subscription);
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        supporterStatus: subscription.status,
+        supporterPlan: supporter.billing,
+        supporterStripeCustomerId: customerId,
+        supporterStripeSubscriptionId: subscriptionId,
+        supporterCurrentPeriodEnd: periodEnd ? new Date(periodEnd * 1000) : null,
+        supporterSince: new Date(),
+        isPremium: isLiveStatus(subscription.status),
+      },
+    });
+    console.log(`[stripe:webhook] supporter activated for ${userId} · ${supporter.key}`);
+    return;
+  }
 
   // Branch 1: feature plan (user-level sub, no Circle). Currently just
   // Party Pro. Checked first because feature keys won't resolve as circle
@@ -218,9 +257,32 @@ async function onCheckoutCompleted(session: Stripe.Checkout.Session) {
   );
 }
 
+function isLiveStatus(status: string): boolean {
+  return status === "active" || status === "trialing";
+}
+
 async function onSubscriptionUpdated(sub: Stripe.Subscription) {
   const periodEnd = subCurrentPeriodEnd(sub);
   const periodEndDate = periodEnd ? new Date(periodEnd * 1000) : null;
+
+  const supporterUser = await prisma.user.findFirst({
+    where: { supporterStripeSubscriptionId: sub.id },
+    select: { id: true },
+  });
+  if (supporterUser) {
+    const lookupKey = sub.items.data[0]?.price?.lookup_key ?? null;
+    const plan = lookupKey ? resolveSupporterLookupKey(lookupKey) : undefined;
+    await prisma.user.update({
+      where: { id: supporterUser.id },
+      data: {
+        supporterStatus: sub.status,
+        supporterCurrentPeriodEnd: periodEndDate,
+        isPremium: isLiveStatus(sub.status),
+        ...(plan ? { supporterPlan: plan.billing } : {}),
+      },
+    });
+    return;
+  }
 
   // Party Pro branch: if this subscription is tied to a User row, update
   // the user's status/period — the column is unique so this is a 0-or-1
@@ -273,6 +335,18 @@ async function onSubscriptionUpdated(sub: Stripe.Subscription) {
 }
 
 async function onSubscriptionDeleted(sub: Stripe.Subscription) {
+  const supporterUser = await prisma.user.findFirst({
+    where: { supporterStripeSubscriptionId: sub.id },
+    select: { id: true },
+  });
+  if (supporterUser) {
+    await prisma.user.update({
+      where: { id: supporterUser.id },
+      data: { supporterStatus: "canceled", isPremium: false },
+    });
+    return;
+  }
+
   // Try Party Pro branch first.
   const partyUser = await prisma.user.findFirst({
     where: { partyProStripeSubscriptionId: sub.id },
@@ -300,6 +374,20 @@ async function onInvoicePaymentFailed(invoice: Stripe.Invoice) {
   const subId = invoiceSubscriptionId(invoice);
   if (!subId) return;
 
+  const supporterUser = await prisma.user.findFirst({
+    where: { supporterStripeSubscriptionId: subId },
+    select: { id: true },
+  });
+  if (supporterUser) {
+    // Keep perks during Stripe's retry window; the subscription.updated /
+    // deleted events settle the final state.
+    await prisma.user.update({
+      where: { id: supporterUser.id },
+      data: { supporterStatus: "past_due" },
+    });
+    return;
+  }
+
   const partyUser = await prisma.user.findFirst({
     where: { partyProStripeSubscriptionId: subId },
     select: { id: true },
@@ -318,4 +406,62 @@ async function onInvoicePaymentFailed(invoice: Stripe.Invoice) {
       data: { subscriptionStatus: "past_due" },
     })
     .catch(() => {});
+}
+
+/* ---------- Open Books: revenue + fees ---------- */
+
+/**
+ * Record every successful charge with Stripe's actual fee, read from its
+ * balance transaction. If the fee isn't available yet we store the standard
+ * estimate and flag it. Idempotent on the charge id.
+ */
+async function onChargeSucceeded(charge: Stripe.Charge) {
+  const stripe = getStripe()!;
+  let feeCents = estimateStripeFeeCents(charge.amount);
+  let netCents = charge.amount - feeCents;
+  let feeEstimated = true;
+
+  const btId =
+    typeof charge.balance_transaction === "string"
+      ? charge.balance_transaction
+      : charge.balance_transaction?.id ?? null;
+  if (btId) {
+    try {
+      const bt = await stripe.balanceTransactions.retrieve(btId);
+      feeCents = bt.fee;
+      netCents = bt.net;
+      feeEstimated = false;
+    } catch (e) {
+      console.warn("[stripe:webhook] balance transaction lookup failed:", e instanceof Error ? e.message : e);
+    }
+  }
+
+  const customerId = typeof charge.customer === "string" ? charge.customer : charge.customer?.id ?? null;
+  await prisma.revenueEvent.upsert({
+    where: { stripeChargeId: charge.id },
+    create: {
+      stripeChargeId: charge.id,
+      customerId,
+      occurredAt: new Date(charge.created * 1000),
+      grossCents: charge.amount,
+      feeCents,
+      netCents,
+      refundedCents: charge.amount_refunded ?? 0,
+      currency: charge.currency,
+      feeEstimated,
+    },
+    update: { feeCents, netCents, feeEstimated, customerId },
+  });
+}
+
+async function onChargeRefunded(charge: Stripe.Charge) {
+  await prisma.revenueEvent
+    .update({
+      where: { stripeChargeId: charge.id },
+      data: { refundedCents: charge.amount_refunded ?? 0 },
+    })
+    .catch(async () => {
+      // Refund for a charge we never saw succeed — record it now.
+      await onChargeSucceeded(charge);
+    });
 }

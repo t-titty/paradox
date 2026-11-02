@@ -22,6 +22,7 @@ import {
   amountFor,
   recurringFor,
   featureLookupKey,
+  SUPPORTER_PLANS,
 } from "../lib/pricing.js";
 import { requireStripe } from "../lib/stripe.js";
 
@@ -138,6 +139,41 @@ async function main() {
       );
     } else {
       console.log(`[stripe:sync] created ${lookupKey} → ${created.id} (${amountCents}¢)`);
+    }
+  }
+
+  // --- Supporter plan (one product, monthly + annual prices) ------------
+  {
+    const key = "SUPPORTER";
+    let productId = existingProducts.get(key);
+    const productPayload = {
+      name: "PARADOX — Supporter",
+      description: "Keeps PARADOX free for everyone. Unlimited AI spars and a supporter badge.",
+      metadata: { plan_key: key, kind: "supporter" as const },
+    };
+    if (!productId) {
+      productId = (await stripe.products.create(productPayload)).id;
+      console.log(`[stripe:sync] created product ${key} → ${productId}`);
+    } else {
+      await stripe.products.update(productId, productPayload);
+    }
+    for (const sp of SUPPORTER_PLANS) {
+      const amountCents = usdToCents(sp.amountUsd);
+      const existing = (
+        await stripe.prices.list({ lookup_keys: [sp.key], active: true, limit: 1 })
+      ).data[0];
+      if (existing && existing.unit_amount === amountCents) continue;
+      const created = await stripe.prices.create({
+        currency: "usd",
+        unit_amount: amountCents,
+        product: productId,
+        recurring: sp.billing === "annual" ? { interval: "year", interval_count: 1 } : { interval: "month", interval_count: 1 },
+        lookup_key: sp.key,
+        transfer_lookup_key: Boolean(existing),
+        metadata: { plan_key: key, billing: sp.billing, kind: "supporter" },
+      });
+      if (existing) await stripe.prices.update(existing.id, { active: false });
+      console.log(`[stripe:sync] ${existing ? "rotated" : "created"} ${sp.key} → ${created.id} (${amountCents}¢)`);
     }
   }
 

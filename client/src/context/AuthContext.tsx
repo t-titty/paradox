@@ -92,6 +92,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         username,
         email,
         password,
+        // The register form won't submit until the age box is ticked.
+        ageConfirmed: true,
       });
       setToken(data.token, true);
       setUser(data.user);

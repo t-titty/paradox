@@ -86,12 +86,42 @@ export function TermsPage() {
           Private data: your email, password hash, and admin-only moderation records.
         </p>
         <p>
+          Highlights: duel messages the Oracle awards a Gold Star may be shown publicly as
+          highlights, without your username — only your tribe. Messages from duels involving a
+          school circle are never shown publicly.
+        </p>
+        <p>
+          Payments for the optional Supporter plan are handled by Stripe; we never see your card
+          number. Totals of what PARADOX earns and spends are published on the Open Books page,
+          never anything that identifies a paying player.
+        </p>
+        <p>
           We do not sell your data. We do not run ads against it. We may use aggregated,
           de-identified votes to study reasoning patterns across tribes.
         </p>
       </Section>
 
-      <Section title="7. THOUGHTFUL DEBATE, NOT HARASSMENT">
+      <Section title="7. AI REFEREE AND AI SPARRING PARTNER">
+        <p>
+          The Oracle is an AI. It sorts justifications into tribes, flags fallacies and personal
+          attacks, and drafts Syntheses. Your justifications and duel messages are sent to our AI
+          provider to do this. The Oracle can be wrong; it never decides who "won".
+        </p>
+        <p>
+          When no human opponent is available you can spar with an AI partner. It is always
+          labelled as AI and never claims to be human.
+        </p>
+      </Section>
+
+      <Section title="8. AGE AND SCHOOLS">
+        <p>
+          You must be 13 or older to create an account, unless you are joining through your
+          school with a teacher's invite code. Members of school circles are only matched with
+          classmates, and their teachers can review their duels.
+        </p>
+      </Section>
+
+      <Section title="9. THOUGHTFUL DEBATE, NOT HARASSMENT">
         <p>
           PARADOX exists so people on opposite sides of hard questions can meet, argue, and sign a
           synthesis neither would have written alone. That is the only thing this platform is for.

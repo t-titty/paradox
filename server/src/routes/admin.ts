@@ -3,7 +3,14 @@ import { z } from "zod";
 import { prisma } from "../db.js";
 import { requireAdmin, type AuthedRequest } from "../middleware/auth.js";
 import { HttpError } from "../middleware/error.js";
-import { parseYmd, ymd } from "../phases.js";
+import { parseYmd, resolvePhase, ymd } from "../phases.js";
+import { env } from "../env.js";
+import {
+  CLOCK_PHASES,
+  refreshClockOverride,
+  runtimeClockOverride,
+  setClockOverride,
+} from "../lib/clockOverride.js";
 import {
   TEST_MODE_SETTING_KEY,
   systemTestModeEnabled,
@@ -24,14 +31,15 @@ adminRouter.get("/stats", async (_req, res, next) => {
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
 
-    const [totalUsers, votesToday, activeDuels, synthesesSigned, pendingSubmissions, totalFeedback] =
+    const [totalUsers, votesToday, activeDuels, synthesesSigned, pendingSubmissions, totalFeedback, openReports] =
       await Promise.all([
-        prisma.user.count(),
+        prisma.user.count({ where: { isBot: false } }),
         prisma.vote.count({ where: { createdAt: { gte: startOfToday } } }),
         prisma.duel.count({ where: { endedAt: null, declinedAt: null } }),
         prisma.duel.count({ where: { bothSigned: true } }),
         prisma.submittedParadox.count({ where: { status: "pending" } }),
         prisma.feedback.count(),
+        prisma.duelReport.count({ where: { status: "open" } }),
       ]);
 
     res.json({
@@ -42,6 +50,7 @@ adminRouter.get("/stats", async (_req, res, next) => {
         synthesesSigned,
         pendingSubmissions,
         totalFeedback,
+        openReports,
       },
     });
   } catch (e) {
@@ -565,7 +574,7 @@ adminRouter.get("/global-late-vow-grants", async (req, res, next) => {
     const paradoxDate =
       typeof req.query.paradoxDate === "string"
         ? req.query.paradoxDate
-        : ymd(new Date());
+        : resolvePhase().today;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(paradoxDate)) {
       throw new HttpError(400, "Invalid paradoxDate", "bad_request");
     }
@@ -685,6 +694,147 @@ adminRouter.delete("/global-late-vow-grants/:id", async (req, res, next) => {
       data: { isActive: false, revokedAt: new Date() },
     });
     res.status(204).end();
+  } catch (e) {
+    next(e);
+  }
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// Duel reports — players flag their opponent from inside a duel. The
+// transcript ships with the report so a moderator can judge in one view.
+// ──────────────────────────────────────────────────────────────────────────
+
+adminRouter.get("/reports", async (req, res, next) => {
+  try {
+    const status = req.query.status === "resolved" ? "resolved" : "open";
+    const reports = await prisma.duelReport.findMany({
+      where: { status },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+      select: {
+        id: true,
+        reason: true,
+        note: true,
+        status: true,
+        createdAt: true,
+        resolvedAt: true,
+        reporter: { select: { id: true, username: true } },
+        reported: { select: { id: true, username: true, civilityScore: true, isBanned: true, isBot: true } },
+        duel: {
+          select: {
+            id: true,
+            kind: true,
+            startedAt: true,
+            transcriptJson: true,
+            paradox: { select: { title: true } },
+          },
+        },
+      },
+    });
+    res.json({ reports });
+  } catch (e) {
+    next(e);
+  }
+});
+
+adminRouter.post("/reports/:id/resolve", async (req, res, next) => {
+  try {
+    const id = req.params.id ?? "";
+    const report = await prisma.duelReport.update({
+      where: { id },
+      data: { status: "resolved", resolvedAt: new Date() },
+      select: { id: true, status: true, resolvedAt: true },
+    });
+    res.json({ report });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// Open Books — fixed monthly running costs (AI spend and Stripe revenue/fees
+// are recorded automatically).
+// ──────────────────────────────────────────────────────────────────────────
+
+const COST_CATEGORIES = ["hosting", "database", "email", "domain", "tools", "other"] as const;
+const monthSchema = z.string().regex(/^\d{4}-\d{2}$/);
+
+adminRouter.get("/operating-costs", async (req, res, next) => {
+  try {
+    const month = monthSchema.parse(req.query.month);
+    const costs = await prisma.operatingCost.findMany({ where: { month }, orderBy: { createdAt: "asc" } });
+    res.json({ costs, categories: COST_CATEGORIES });
+  } catch (e) {
+    next(e);
+  }
+});
+
+const costSchema = z.object({
+  month: monthSchema,
+  category: z.enum(COST_CATEGORIES),
+  label: z.string().trim().min(1).max(80),
+  amountCents: z.number().int().min(0).max(100_000_000),
+});
+
+adminRouter.post("/operating-costs", async (req, res, next) => {
+  try {
+    const data = costSchema.parse(req.body);
+    const cost = await prisma.operatingCost.create({ data });
+    res.status(201).json({ cost });
+  } catch (e) {
+    next(e);
+  }
+});
+
+adminRouter.delete("/operating-costs/:id", async (req, res, next) => {
+  try {
+    await prisma.operatingCost.delete({ where: { id: req.params.id ?? "" } });
+    res.json({ ok: true });
+  } catch (e) {
+    next(e);
+  }
+});
+
+/** Copy last month's fixed costs into a new month (most bills repeat). */
+adminRouter.post("/operating-costs/copy", async (req, res, next) => {
+  try {
+    const { from, to } = z.object({ from: monthSchema, to: monthSchema }).parse(req.body);
+    const source = await prisma.operatingCost.findMany({ where: { month: from } });
+    if (source.length === 0) throw new HttpError(404, `No costs recorded for ${from}`, "not_found");
+    await prisma.operatingCost.createMany({
+      data: source.map((c) => ({ month: to, category: c.category, label: c.label, amountCents: c.amountCents })),
+    });
+    res.json({ copied: source.length });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// Test clock — force the game phase for everyone (staging / dev only).
+// ──────────────────────────────────────────────────────────────────────────
+
+adminRouter.get("/clock", async (_req, res, next) => {
+  try {
+    await refreshClockOverride();
+    res.json({
+      available: env.ALLOW_CLOCK_OVERRIDE,
+      override: runtimeClockOverride(),
+      phase: resolvePhase(),
+    });
+  } catch (e) {
+    next(e);
+  }
+});
+
+adminRouter.post("/clock", async (req, res, next) => {
+  try {
+    if (!env.ALLOW_CLOCK_OVERRIDE) {
+      throw new HttpError(403, "The test clock is disabled on this server (ALLOW_CLOCK_OVERRIDE).", "clock_disabled");
+    }
+    const { phase } = z.object({ phase: z.enum([...CLOCK_PHASES, "off"]) }).parse(req.body);
+    await setClockOverride(phase === "off" ? null : phase);
+    res.json({ override: runtimeClockOverride(), phase: resolvePhase() });
   } catch (e) {
     next(e);
   }

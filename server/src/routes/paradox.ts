@@ -2,9 +2,12 @@ import { Router } from "express";
 import { prisma } from "../db.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { HttpError } from "../middleware/error.js";
-import { parseYmd } from "../phases.js";
+import { duelsOpen, lateVowsOpen, parseYmd } from "../phases.js";
 import { resolvePhaseForUser } from "../lib/testMode.js";
 import { findThrowbackVote } from "../lib/throwback.js";
+import { ensureParadoxForDate } from "../lib/schedule.js";
+import { computeStreakForUser } from "../lib/streaks.js";
+import { paradoxNumber } from "../lib/results.js";
 
 export const paradoxRouter = Router();
 
@@ -43,6 +46,8 @@ paradoxRouter.get("/today", requireAuth, async (req, res, next) => {
     }
 
     const airDate = parseYmd(phase.today);
+    // Never leave a day empty — fills from the unscheduled pool or re-airs.
+    await ensureParadoxForDate(phase.today);
     const paradox = await prisma.paradox.findUnique({
       where: { airDate },
       select: {
@@ -65,10 +70,16 @@ paradoxRouter.get("/today", requireAuth, async (req, res, next) => {
       );
     }
 
-    const [vote, lateVowGrant, globalLateVow] = await Promise.all([
+    const [vote, lateVowGrant, globalLateVow, streak, number, me] = await Promise.all([
       prisma.vote.findUnique({
         where: { userId_paradoxId: { userId, paradoxId: paradox.id } },
-        select: { choice: true, justification: true, tribeAssigned: true, createdAt: true },
+        select: {
+          choice: true,
+          justification: true,
+          tribeAssigned: true,
+          createdAt: true,
+          isLate: true,
+        },
       }),
       prisma.lateVowGrant.findUnique({
         where: { userId_paradoxId: { userId, paradoxId: paradox.id } },
@@ -78,6 +89,9 @@ paradoxRouter.get("/today", requireAuth, async (req, res, next) => {
         where: { paradoxId: paradox.id, isActive: true },
         select: { id: true, createdAt: true },
       }),
+      computeStreakForUser(userId, phase.today),
+      paradoxNumber(paradox.airDate),
+      prisma.user.findUnique({ where: { id: userId }, select: { onboardedAt: true } }),
     ]);
 
     // Surface only unused grants to the client — once burned the banner
@@ -95,6 +109,12 @@ paradoxRouter.get("/today", requireAuth, async (req, res, next) => {
       vote: vote ?? null,
       lateVowGrant: unusedGrant,
       globalLateVowActive: globalLateVow !== null,
+      // Self-serve late vows: missed the window? You can still vote today.
+      lateVowOpen: vote === null && lateVowsOpen(phase),
+      duelsOpen: duelsOpen(phase),
+      paradoxNumber: number,
+      streak,
+      needsOnboarding: !me?.onboardedAt,
     });
   } catch (e) {
     next(e);

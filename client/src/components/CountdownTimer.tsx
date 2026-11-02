@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 
+import type { PhaseState } from "../lib/types.ts";
+
 type Variant = "fullscreen" | "small";
 
 export interface ClockWindow {
@@ -13,59 +15,32 @@ export interface ClockWindow {
 const WARNING_MS = 5 * 60 * 1000;
 
 /**
- * Map the current local time to a countdown window. The day splits into
- * four repeating segments:
- *   [00:00, 08:00)  →  fullscreen  "DROP BEGINS IN"  → 08:00 today
- *   [08:00, 12:00)  →  small       "VOW CLOSES IN"   → 12:00 today
- *   [12:00, 20:00)  →  small       "DUEL BEGINS IN"  → 20:00 today
- *   [20:00, 24:00)  →  fullscreen  "DROP BEGINS IN"  → 00:00 tomorrow
+ * Map the server's phase to a countdown. The server runs one game clock
+ * (PHASE_TIMEZONE) for everyone, so we count down to the instants it gives
+ * us rather than to hours on the viewer's own clock.
  *
- * Pure — all state comes from `now`, so both the timer and its host page
- * can derive the same config without having to share state.
+ *   bridge (overnight) → fullscreen "THE DROP BEGINS IN"
+ *   vow                → small      "THE VOW CLOSES IN"
+ *   sort               → small      "PRIME-TIME DUELS IN"
+ *   duel               → small      "NEXT DROP IN"
  */
-export function getClockWindow(now: Date = new Date()): ClockWindow {
-  const hour = now.getHours();
-  if (hour < 8) {
-    return {
-      variant: "fullscreen",
-      label: "DROP BEGINS IN",
-      target: atHourToday(now, 8),
-    };
+export function getClockWindow(phase: PhaseState): ClockWindow {
+  switch (phase.phase) {
+    case "bridge":
+      return { variant: "fullscreen", label: "THE DROP BEGINS IN", target: new Date(phase.nextTransitionAt) };
+    case "vow":
+    case "drop":
+      return { variant: "small", label: "THE VOW CLOSES IN", target: new Date(phase.nextTransitionAt) };
+    case "sort":
+      return { variant: "small", label: "PRIME-TIME DUELS IN", target: new Date(phase.nextTransitionAt) };
+    case "duel":
+      return { variant: "small", label: "NEXT DROP IN", target: new Date(phase.nextDropAt) };
   }
-  if (hour < 12) {
-    return {
-      variant: "small",
-      label: "VOW CLOSES IN",
-      target: atHourToday(now, 12),
-    };
-  }
-  if (hour < 20) {
-    return {
-      variant: "small",
-      label: "DUEL BEGINS IN",
-      target: atHourToday(now, 20),
-    };
-  }
-  // 8 PM → midnight: counts down to the end of "today", then naturally
-  // flips into the midnight→8 AM window on the next tick.
-  return {
-    variant: "fullscreen",
-    label: "DROP BEGINS IN",
-    target: atNextMidnight(now),
-  };
 }
 
-function atHourToday(now: Date, hour: number): Date {
-  const d = new Date(now);
-  d.setHours(hour, 0, 0, 0);
-  return d;
-}
-
-function atNextMidnight(now: Date): Date {
-  const d = new Date(now);
-  d.setDate(d.getDate() + 1);
-  d.setHours(0, 0, 0, 0);
-  return d;
+/** "8:00 AM" — the daily Drop in the viewer's own time zone. */
+export function localDropTime(phase: PhaseState): string {
+  return new Date(phase.nextDropAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
 function pad2(n: number): string {
@@ -82,9 +57,26 @@ function pad3(n: number): string {
  * Under 5 minutes remaining the digits turn blood-red, a sharp-step flash
  * kicks in, and a pulsing "TIME IS RUNNING OUT." line appears below.
  */
-export function CountdownTimer() {
+export function CountdownTimer({
+  phase,
+  onElapsed,
+}: {
+  phase: PhaseState;
+  /** Called once when the countdown reaches zero (e.g. to refetch the phase). */
+  onElapsed?: () => void;
+}) {
   const [now, setNow] = useState(() => new Date());
-  const window = getClockWindow(now);
+  const window = getClockWindow(phase);
+  const remainingMs = Math.max(0, window.target.getTime() - now.getTime());
+
+  useEffect(() => {
+    if (remainingMs > 0 || !onElapsed) return;
+    // Small delay so the server's clock has definitely crossed the boundary.
+    const t = globalThis.setTimeout(onElapsed, 1500);
+    return () => globalThis.clearTimeout(t);
+    // Fire once per target, not on every tick.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [remainingMs === 0, window.target.getTime()]);
 
   useEffect(() => {
     const intervalMs = window.variant === "fullscreen" ? 100 : 1000;
@@ -92,7 +84,6 @@ export function CountdownTimer() {
     return () => globalThis.clearInterval(id);
   }, [window.variant]);
 
-  const remainingMs = Math.max(0, window.target.getTime() - now.getTime());
   const warning = remainingMs <= WARNING_MS;
   const colorClass = warning ? "text-blood" : "text-gold";
   const flashClass = warning ? "paradox-timer-flash" : "";
@@ -173,6 +164,9 @@ export function CountdownTimer() {
             TIME IS RUNNING OUT.
           </p>
         )}
+        <p className="mt-6 font-mono text-xs uppercase tracking-brutal text-muted">
+          A NEW PARADOX DROPS DAILY AT {localDropTime(phase)} YOUR TIME
+        </p>
       </div>
     );
   }

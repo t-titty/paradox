@@ -3,19 +3,37 @@ import type { DuelSnapshotDTO } from "../../../lib/duelTypes.ts";
 import { DuelTimer } from "./DuelTimer.tsx";
 import { Message } from "./Message.tsx";
 import { BridgePanel } from "./BridgePanel.tsx";
+import { ReportButton } from "./ReportButton.tsx";
 
 interface Props {
   snapshot: DuelSnapshotDTO;
   onSendMessage: (text: string) => void;
   onAcknowledge: (text: string) => void;
   onRequestExtension: () => void;
+  onReport: (reason: string, note?: string) => void;
 }
+
+/** One-tap openers for Clarification mode — the hardest mode for new players. */
+const QUESTION_STARTERS = [
+  "What would change your mind?",
+  "Who bears the cost of your choice?",
+  "Is there a version of this where you'd pick the other side?",
+  "What matters more to you here — the outcome or the act?",
+  "What do you think I'm missing?",
+];
+
+const MODE_HINT: Record<string, string> = {
+  clarification: "QUESTIONS ONLY · UNDERSTAND BEFORE YOU ATTACK · END WITH '?'",
+  crucible: "OPEN ARGUMENT · STEELMAN FOR GOLD STARS · FALLACIES EARN RED FLAGS",
+  bridge: "FIND COMMON GROUND · ACKNOWLEDGE THEIR BEST POINT BELOW",
+  over: "THE DUEL IS OVER",
+};
 
 /**
  * The live Duel room. Three-pane layout: timer header, scrolling transcript,
  * mode-aware input footer. Auto-scrolls on new message.
  */
-export function DuelRoom({ snapshot, onSendMessage, onAcknowledge, onRequestExtension }: Props) {
+export function DuelRoom({ snapshot, onSendMessage, onAcknowledge, onRequestExtension, onReport }: Props) {
   const [draft, setDraft] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
   const transcriptRef = useRef<HTMLDivElement>(null);
@@ -80,6 +98,9 @@ export function DuelRoom({ snapshot, onSendMessage, onAcknowledge, onRequestExte
           </div>
           <div className="hidden text-muted md:block">VS</div>
           <div className="min-w-0 truncate md:text-right">
+            {opponent.isAi && (
+              <span className="mr-2 border border-gold px-1 text-[10px] text-gold">AI</span>
+            )}
             <span className="text-blood">{opponent.username}</span>
             <span className="mx-2 text-muted">·</span>
             <span className="text-bone">{opponent.tribe.toUpperCase()}</span>
@@ -87,9 +108,17 @@ export function DuelRoom({ snapshot, onSendMessage, onAcknowledge, onRequestExte
             <span className="text-muted">VOTED {opponent.choice}</span>
           </div>
         </div>
-        <p className="mt-2 truncate font-mono text-xs text-muted">
-          PARADOX · {snapshot.paradoxTitle.toUpperCase()}
-        </p>
+        <div className="mt-2 flex items-center justify-between gap-3">
+          <p className="truncate font-mono text-xs text-muted">
+            PARADOX · {snapshot.paradoxTitle.toUpperCase()}
+            {snapshot.kind === "practice" && <span className="ml-2 text-gold">· PRACTICE</span>}
+            {snapshot.kind === "spar" && (
+              <span className="ml-2 text-gold">· SPAR{snapshot.scored ? " · HALF WP" : " · UNSCORED"}</span>
+            )}
+          </p>
+          {!opponent.isAi && <ReportButton onReport={onReport} />}
+        </div>
+        <p className="mt-1 font-mono text-[10px] uppercase tracking-brutal text-gold">{MODE_HINT[mode]}</p>
       </header>
 
       <div
@@ -123,6 +152,20 @@ export function DuelRoom({ snapshot, onSendMessage, onAcknowledge, onRequestExte
         className="border-t-2 border-bone bg-ink px-4 py-3 md:px-6 md:py-4"
         style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 0.75rem)" }}
       >
+        {mode === "clarification" && !draft && (
+          <div className="mx-auto mb-2 flex max-w-4xl gap-2 overflow-x-auto pb-1">
+            {QUESTION_STARTERS.map((q) => (
+              <button
+                key={q}
+                type="button"
+                onClick={() => setDraft(q)}
+                className="shrink-0 border border-smoke px-2 py-1 font-mono text-[11px] text-muted hover:border-gold hover:text-gold"
+              >
+                {q}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="mx-auto flex max-w-4xl gap-2 md:gap-3">
           <input
             className="brutal-input flex-1"

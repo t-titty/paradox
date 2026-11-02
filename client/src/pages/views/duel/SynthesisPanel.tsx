@@ -6,6 +6,8 @@ interface Props {
   state: SynthesisStateDTO;
   onSign: () => void;
   onDecline: () => void;
+  /** Only human-vs-human syntheses enter the public Global Archive. */
+  kind?: "pvp" | "spar" | "practice";
 }
 
 /**
@@ -17,7 +19,8 @@ interface Props {
  *   signed_both     → archive confirmation + link
  *   declined        → graceful "no bridge" state
  */
-export function SynthesisPanel({ you, state, onSign, onDecline }: Props) {
+export function SynthesisPanel({ you, state, onSign, onDecline, kind = "pvp" }: Props) {
+  const isAi = kind !== "pvp";
   if (state.kind === "none") return null;
 
   if (state.kind === "pending") {
@@ -47,12 +50,20 @@ export function SynthesisPanel({ you, state, onSign, onDecline }: Props) {
         <p className="mt-4 border-t border-smoke pt-4 font-mono text-lg leading-relaxed text-bone">
           "{state.text}"
         </p>
-        <p className="mt-4 font-mono text-xs uppercase tracking-brutal text-muted">
-          SIGNED · ENTERED THE GLOBAL ARCHIVE
-        </p>
-        <Link to="/archive" className="brutal-btn brutal-btn-gold mt-5 inline-block">
-          VIEW IN ARCHIVE →
-        </Link>
+        {isAi ? (
+          <p className="mt-4 font-mono text-xs uppercase tracking-brutal text-muted">
+            SIGNED · SPAR SYNTHESES STAY PRIVATE — ONLY HUMAN-VS-HUMAN BRIDGES ENTER THE ARCHIVE
+          </p>
+        ) : (
+          <>
+            <p className="mt-4 font-mono text-xs uppercase tracking-brutal text-muted">
+              SIGNED · ENTERED THE GLOBAL ARCHIVE
+            </p>
+            <Link to="/archive" className="brutal-btn brutal-btn-gold mt-5 inline-block">
+              VIEW IN ARCHIVE →
+            </Link>
+          </>
+        )}
       </div>
     );
   }
@@ -74,7 +85,9 @@ export function SynthesisPanel({ you, state, onSign, onDecline }: Props) {
           ? "Your opposite has signed. Will you?"
           : state.kind === "signed_partial" && iSigned
             ? "You have signed. Waiting on your opposite."
-            : "Do you sign this Synthesis? Both signatures enter it into the Global Archive."}
+            : isAi
+              ? "Do you sign this Synthesis? Your sparring partner will co-sign."
+              : "Do you sign this Synthesis? Both signatures enter it into the Global Archive."}
       </p>
 
       <div className="mt-5 flex gap-3">

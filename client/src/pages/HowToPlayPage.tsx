@@ -24,9 +24,15 @@ export function HowToPlayPage() {
           the vote itself.
         </p>
         <p>
-          That evening you are matched against someone from an opposing tribe for a
-          10-minute live duel. You argue. You listen. You either walk away, or sign a
-          <Gold> Synthesis</Gold> — a statement neither of you would have written alone.
+          Once the Vow closes, the arena opens: you are matched against someone from an
+          opposing tribe for a 10-minute live duel (prime time is the evening bell). No
+          human around? Spar with the Oracle's partner instead. You argue. You listen. You
+          either walk away, or sign a <Gold>Synthesis</Gold> — a statement neither of you
+          would have written alone.
+        </p>
+        <p className="font-mono text-sm text-muted">
+          Everyone plays on one shared game clock. The Today page shows every phase in your
+          own time zone.
         </p>
         <p className="border-l-2 border-gold pl-4 text-gold">
           Your reasoning defines you, not your score.
@@ -49,22 +55,22 @@ export function HowToPlayPage() {
         <Phase
           roman="II"
           name="THE VOW"
-          time="UNTIL NOON"
-          body="Vote, then write your one-sentence justification. The sentence is the game. Once you submit, it is locked — no editing, no takebacks. Choose your words like they are public record, because they are."
+          time="08:00 — NOON"
+          body="Vote, then write your one-sentence justification. The sentence is the game. Once you submit, it is locked — no editing, no takebacks. Miss the window? You can still cast a late vow until midnight and you'll be sorted on the spot."
         />
 
         <Phase
           roman="III"
           name="THE SORT"
-          time="NOON — 20:00"
-          body="The Oracle AI reads every justification and assigns each voter to a Moral Tribe. Two players with identical votes can end up in different tribes if their reasoning differs. The sentence, not the click, decides."
+          time="NOON"
+          body="The Oracle AI reads every justification and assigns each voter to a Moral Tribe. Two players with identical votes can end up in different tribes if their reasoning differs. The sentence, not the click, decides. Results — and how each tribe split — are revealed the moment the Vow closes."
         />
 
         <Phase
           roman="IV"
           name="THE DUEL"
-          time="20:00"
-          body="Ten-minute matchmaking pairs you with an opponent from an opposing tribe. The duel runs in three combat modes:"
+          time="NOON — MIDNIGHT · PRIME TIME 20:00"
+          body="Matchmaking pairs you with an opponent from an opposing tribe for ten minutes. If nobody turns up within two minutes, you can spar with an AI from the tribe most opposed to yours (your first spar each day scores at half rate). The duel runs in three combat modes:"
           modes={[
             {
               label: "CLARIFICATION",
@@ -79,7 +85,7 @@ export function HowToPlayPage() {
             {
               label: "BRIDGE WINDOW",
               range: "8:00 — 10:00",
-              body: "Steelman or surrender. Find the sliver of common ground the Oracle can build a Synthesis from.",
+              body: "Acknowledge the most reasonable point your opponent made, in your own words. Each acknowledgement earns the other side Wisdom Points. Skip it and you lose Civility.",
             },
           ]}
         />
@@ -142,17 +148,17 @@ export function HowToPlayPage() {
         />
         <Rule
           label="RED FLAGS"
-          body="Flags logical fallacies — strawman, ad hominem, false dichotomy, appeal to popularity — as they happen in the duel. Red Flags cost Wisdom Points."
+          body="Flags logical fallacies — straw man, false dichotomy, slippery slope, whataboutism and more — in the Crucible. Each Red Flag costs 2 Wisdom Points (up to five per duel)."
           color="blood"
         />
         <Rule
           label="GOLD STARS"
-          body="Marks strong moves: clean steelmanning, precise definitions, conceding a point gracefully. Gold Stars earn Wisdom Points."
+          body="Marks strong moves in the Crucible: clean steelmanning, precise distinctions, conceding a point gracefully. Each Gold Star earns 3 Wisdom Points (up to five per duel)."
           color="gold"
         />
         <Rule
-          label="AD HOMINEM GREYOUT"
-          body="Personal attacks are detected mid-type and greyed out. The opponent never sees the insult — only a redaction mark. Repeat offenders lose Civility fast."
+          label="AD HOMINEM REDACTION"
+          body="Every message is checked before your opponent sees it. Personal attacks are redacted — the opponent only ever sees a redaction mark — and cost 10 Civility each."
         />
         <Rule
           label="SYNTHESIS"
@@ -166,7 +172,7 @@ export function HowToPlayPage() {
         <Stat
           label="WISDOM POINTS"
           shorthand="WP"
-          body="Earned from Gold Stars, signed syntheses, and surviving duels without Red Flags. WP unlocks cosmetic flair, deeper archive access, and the right to submit your own dilemmas."
+          body="Earned from Gold Stars, finishing duels, having your points acknowledged, finishing a duel without a Red Flag, and co-signing a Synthesis. WP raises your title — Initiate, Sophist, Dialectician, Philosopher, Sage, Oracle-Touched — and buys streak freezes."
           color="gold"
         />
         <Stat
@@ -194,16 +200,16 @@ export function HowToPlayPage() {
           THE THREE AXES.
         </p>
         <Axis
-          label="X — OUTCOMES ↔ PRINCIPLES"
-          body="Do you reason from consequences or from rules? Utilitarians drift one way, deontologists the other."
+          label="X — DEONTOLOGY ↔ CONSEQUENTIALISM"
+          body="Do you reason from rules and duties, or from consequences? Deontologists sit at one end, utilitarians at the other."
         />
         <Axis
-          label="Y — SELF ↔ OTHERS"
-          body="Does your justification center the actor or the affected? Virtue and stoic reasoning lean inward; utilitarian reasoning leans outward."
+          label="Y — INDIVIDUALISM ↔ COLLECTIVISM"
+          body="Does your reasoning centre the individual or the group? Existentialists and hedonists lean individual; utilitarians lean collective."
         />
         <Axis
-          label="Z — CERTAINTY ↔ DOUBT"
-          body="How sure are you? Nihilists and existentialists live deep on the doubt end; deontologists tend to speak in absolutes."
+          label="Z — EMOTIONAL ↔ RATIONAL"
+          body="Does your reasoning run on felt experience or on cool argument? Hedonists and existentialists lean emotional; stoics lean rational."
         />
         <p>
           Over time the cluster moves. That motion is the game — watch yourself think.
@@ -213,24 +219,43 @@ export function HowToPlayPage() {
       {/* 7. THROWBACK THURSDAY */}
       <Section number="07" title="THROWBACK THURSDAY">
         <p>
-          Every Thursday, instead of a fresh dilemma, PARADOX resurfaces one you have
-          answered before. You vote again, write a new justification, and the Oracle shows
-          you both sentences side by side.
+          On Thursdays, if you answered a Thursday dilemma at least four weeks ago,
+          PARADOX resurfaces it instead of a fresh one. You vote again, write a new
+          justification, and see both sentences side by side — marked as shifted, held,
+          or evolved.
         </p>
         <p className="border-l-2 border-gold pl-4 text-bone">
           Did you flip your vote? Did your reasoning sharpen? Did the tribe you landed in
           last time still fit?
         </p>
         <p>
-          Throwback results feed the Constellation as a separate series, so drift is
-          visible at a glance.
+          Flip your vote and you earn the CHANGED MY MIND badge.
+        </p>
+      </Section>
+
+      {/* STREAKS, TITLES, TRIBE WARS */}
+      <Section number="★" title="STREAKS, TITLES & TRIBE WARS">
+        <p>
+          Vow every day to build a <Gold>streak</Gold>. Miss a day and it resets — unless you
+          hold a <Gold>streak freeze</Gold> (50 WP each, up to three), which is spent
+          automatically to cover the gap the next time you vow.
+        </p>
+        <p>
+          Every week the tribes compete in <Link to="/tribe-wars" className="text-gold hover:text-bone">Tribe Wars</Link>:
+          Gold Stars and signed Syntheses score points, Red Flags lose them, and scores are
+          per member so the biggest tribe doesn't win by size.
+        </p>
+        <p>
+          Share your result after the Sort — your tribe, how many people sided with you, and
+          your streak, as a card your friends can tap straight into.
         </p>
       </Section>
 
       {/* 8. GLOBAL ARCHIVE */}
       <Section number="08" title="THE GLOBAL ARCHIVE">
         <p>
-          Every signed Synthesis becomes permanent public record. Browse the{" "}
+          Every Synthesis signed by two human opponents becomes permanent public record
+          (spars with the AI stay private). Browse the{" "}
           <Link to="/archive" className="text-gold hover:text-bone">
             Archive
           </Link>{" "}

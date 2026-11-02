@@ -36,6 +36,8 @@ export interface DuelMessageDTO {
   mode: CombatMode;
   sentAt: string;
   verdict: OracleVerdict | null;
+  /** Ad hominem: the opponent sees only a redaction mark (text is ""). */
+  redacted: boolean;
 }
 
 export interface AcknowledgementDTO {
@@ -53,7 +55,12 @@ export interface SelfDuelInfoDTO {
   choiceText: string;
 }
 
-export interface OpponentDTO extends SelfDuelInfoDTO {}
+export interface OpponentDTO extends SelfDuelInfoDTO {
+  /** True when the opponent is the AI sparring partner. */
+  isAi: boolean;
+}
+
+export type DuelKind = "pvp" | "spar" | "practice";
 
 export interface DuelSnapshotDTO {
   duelId: string;
@@ -64,6 +71,10 @@ export interface DuelSnapshotDTO {
   duelEndsAt: string;
   nextTransitionAt: string | null;
   mode: CombatMode;
+  kind: DuelKind;
+  /** False for practice / repeat spars: nothing changes WP or civility. */
+  scored: boolean;
+  timing: { clarificationEndMs: number; crucibleEndMs: number; durationMs: number };
   you: SelfDuelInfoDTO;
   opponent: OpponentDTO;
   messages: DuelMessageDTO[];
@@ -76,8 +87,8 @@ export type MatchmakingStatus =
   | { state: "idle" }
   | { state: "queued"; since: string; queueSize: number; echoChamber: boolean }
   | { state: "matched"; duelId: string }
-  | { state: "timeout" }
-  | { state: "ineligible"; reason: string };
+  | { state: "timeout"; sparAvailable: boolean }
+  | { state: "ineligible"; reason: string; sparAvailable?: boolean };
 
 export type SynthesisStateDTO =
   | { kind: "none" }
@@ -102,12 +113,15 @@ export interface EndReason {
 export interface ClientToServerEvents {
   "matchmaking:join": () => void;
   "matchmaking:leave": () => void;
+  "matchmaking:spar": () => void;
+  "matchmaking:practice": () => void;
   "duel:hello": (duelId: string) => void;
   "duel:message": (payload: { duelId: string; text: string }) => void;
   "duel:acknowledge": (payload: { duelId: string; text: string }) => void;
   "duel:request_extension": (payload: { duelId: string }) => void;
   "synthesis:sign": (payload: { duelId: string }) => void;
   "synthesis:decline": (payload: { duelId: string }) => void;
+  "duel:report": (payload: { duelId: string; reason: string; note?: string }) => void;
 }
 
 export interface ServerToClientEvents {
@@ -120,6 +134,7 @@ export interface ServerToClientEvents {
   "duel:extension_update": (payload: { extensionRequests: string[]; granted: boolean }) => void;
   "duel:ended": (payload: { duelId: string; reason: EndReason; endedAt: string }) => void;
   "duel:error": (payload: { code: string; message: string }) => void;
+  "duel:notice": (payload: { code: string; message: string }) => void;
   "synthesis:update": (payload: { duelId: string; state: SynthesisStateDTO }) => void;
   "user:update": (stats: UserStatsDTO) => void;
 }

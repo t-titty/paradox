@@ -23,8 +23,11 @@ export function getSocket(): DuelSocket {
     auth: { token },
     autoConnect: true,
     reconnection: true,
-    reconnectionAttempts: 5,
+    // Keep trying through a deploy — live duels are recovered server-side
+    // and players have a grace period to come back.
+    reconnectionAttempts: Infinity,
     reconnectionDelay: 500,
+    reconnectionDelayMax: 4000,
   });
 
   return singleton;

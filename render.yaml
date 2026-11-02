@@ -1,0 +1,39 @@
+# Render Blueprint — free play-test copy of PARADOX.
+# Render → New → Blueprint → pick this repo. You'll be asked for the values
+# marked `sync: false`. The database is Neon's free Postgres (paste its
+# connection string into DATABASE_URL); see TESTING.md → "Free hosting".
+services:
+  - type: web
+    name: paradox
+    runtime: node
+    plan: free
+    buildCommand: npm ci --include=dev && npm run build
+    # Runs migrations + the (idempotent) seed, then starts the server.
+    startCommand: npm run start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      # Neon → your project → Connect → turn OFF connection pooling → copy.
+      - key: DATABASE_URL
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      # Your username — that account becomes an admin when you register.
+      - key: ADMIN_USERNAMES
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      # Play-test conveniences. Never set ALLOW_CLOCK_OVERRIDE on the live game.
+      - key: ALLOW_CLOCK_OVERRIDE
+        value: "true"
+      # Let the free Neon database sleep when nobody is playing.
+      - key: IDLE_PAUSE_MINUTES
+        value: "10"
+      # AI model choices — the cheapest that work well for testing.
+      - key: ORACLE_FAST_MODEL
+        value: claude-haiku-5-5
+      - key: PHASE_TIMEZONE
+        value: America/New_York

@@ -7,6 +7,9 @@ import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { userHasCircleAccess } from "../lib/circleAccess.js";
 import { resolveLookupKey } from "../lib/pricing.js";
 import { getStripe } from "../lib/stripe.js";
+import { parseYmd, resolvePhase } from "../phases.js";
+import { addDaysYmd } from "../lib/time.js";
+import { computeStreak } from "../lib/streaks.js";
 
 export const circlesRouter = Router();
 
@@ -693,6 +696,134 @@ circlesRouter.delete("/:id/members/:userId", requireAuth, async (req, res, next)
       where: { circleId_userId: { circleId, userId: targetUserId } },
     });
     res.status(204).end();
+  } catch (e) {
+    next(e);
+  }
+});
+
+/**
+ * GET /api/circles/:id/dashboard
+ * Teacher / manager view. OWNER or ADMIN only.
+ *
+ *  - today's tribe spread and vote split across the circle's members
+ *  - per-member participation (vows in the last 7 and 30 days, latest
+ *    tribe, current streak, civility, Gold Stars / Red Flags)
+ *  - recent duels between two members of this circle, with transcripts,
+ *    so a teacher can review classroom debates. Duels with people outside
+ *    the circle are not exposed here.
+ */
+circlesRouter.get("/:id/dashboard", requireAuth, async (req, res, next) => {
+  try {
+    const { userId } = req as AuthedRequest;
+    const circleId = req.params.id!;
+    await requireCircleManager(userId, circleId);
+
+    const phase = resolvePhase();
+    const today = phase.today;
+    const memberships = await prisma.circleMembership.findMany({
+      where: { circleId },
+      select: {
+        role: true,
+        user: { select: { id: true, username: true, civilityScore: true, wisdomPoints: true } },
+      },
+    });
+    const memberIds = memberships.map((m) => m.user.id);
+    const since30 = parseYmd(addDaysYmd(today, -29));
+    const since7 = addDaysYmd(today, -6);
+
+    const [votes, marks, duels, todayParadox] = await Promise.all([
+      prisma.vote.findMany({
+        where: { userId: { in: memberIds }, paradox: { airDate: { gte: since30 } } },
+        select: {
+          userId: true,
+          choice: true,
+          tribeAssigned: true,
+          paradox: { select: { airDate: true } },
+        },
+      }),
+      prisma.oracleMark.groupBy({
+        by: ["userId", "kind"],
+        where: { userId: { in: memberIds }, createdAt: { gte: since30 } },
+        _count: { _all: true },
+      }),
+      prisma.duel.findMany({
+        where: { kind: "pvp", userAId: { in: memberIds }, userBId: { in: memberIds } },
+        orderBy: { startedAt: "desc" },
+        take: 25,
+        select: {
+          id: true,
+          startedAt: true,
+          endedAt: true,
+          bothSigned: true,
+          synthesisText: true,
+          transcriptJson: true,
+          paradox: { select: { title: true } },
+          userA: { select: { username: true } },
+          userB: { select: { username: true } },
+        },
+      }),
+      prisma.paradox.findUnique({ where: { airDate: parseYmd(today) }, select: { id: true, title: true } }),
+    ]);
+
+    const tribeSpread: Record<string, number> = {};
+    const split = { A: 0, B: 0 };
+    const perMember = new Map<
+      string,
+      { vows7: number; vows30: number; latestTribe: string | null; latestDate: string | null; days: string[] }
+    >();
+    for (const id of memberIds) perMember.set(id, { vows7: 0, vows30: 0, latestTribe: null, latestDate: null, days: [] });
+    for (const v of votes) {
+      const date = v.paradox.airDate ? v.paradox.airDate.toISOString().slice(0, 10) : null;
+      if (!date) continue;
+      const row = perMember.get(v.userId)!;
+      row.vows30++;
+      row.days.push(date);
+      if (date >= since7) row.vows7++;
+      if (!row.latestDate || date > row.latestDate) {
+        row.latestDate = date;
+        row.latestTribe = v.tribeAssigned;
+      }
+      if (date === today) {
+        split[v.choice]++;
+        if (v.tribeAssigned) tribeSpread[v.tribeAssigned] = (tribeSpread[v.tribeAssigned] ?? 0) + 1;
+      }
+    }
+    const markMap = new Map<string, { goldStars: number; redFlags: number }>();
+    for (const m of marks) {
+      const r = markMap.get(m.userId) ?? { goldStars: 0, redFlags: 0 };
+      if (m.kind === "gold_star") r.goldStars += m._count._all;
+      else r.redFlags += m._count._all;
+      markMap.set(m.userId, r);
+    }
+
+    res.json({
+      today: { date: today, paradox: todayParadox, vowedCount: split.A + split.B, split, tribeSpread },
+      members: memberships.map((m) => {
+        const row = perMember.get(m.user.id)!;
+        return {
+          userId: m.user.id,
+          username: m.user.username,
+          role: m.role,
+          civilityScore: m.user.civilityScore,
+          wisdomPoints: m.user.wisdomPoints,
+          vows7: row.vows7,
+          vows30: row.vows30,
+          latestTribe: row.latestTribe,
+          streak: computeStreak(row.days, today).current,
+          ...(markMap.get(m.user.id) ?? { goldStars: 0, redFlags: 0 }),
+        };
+      }),
+      duels: duels.map((d) => ({
+        id: d.id,
+        paradoxTitle: d.paradox.title,
+        startedAt: d.startedAt,
+        endedAt: d.endedAt,
+        bothSigned: d.bothSigned,
+        synthesisText: d.synthesisText,
+        players: [d.userA.username, d.userB.username],
+        transcript: d.transcriptJson,
+      })),
+    });
   } catch (e) {
     next(e);
   }

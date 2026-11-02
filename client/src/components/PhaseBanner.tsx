@@ -3,25 +3,31 @@ import type { Phase } from "../lib/types.ts";
 const LABELS: Record<Phase, { roman: string; title: string; sub: string }> = {
   drop: { roman: "I", title: "THE DROP", sub: "A new paradox arrives." },
   vow: { roman: "II", title: "THE VOW", sub: "Take a side. One sentence." },
-  sort: { roman: "III", title: "THE SORT", sub: "The Oracle has read you." },
-  duel: { roman: "IV", title: "THE DUEL", sub: "Ten minutes. Find your match." },
-  bridge: { roman: "V", title: "THE BRIDGE", sub: "Until dawn. Meet tomorrow." },
+  sort: { roman: "III", title: "THE SORT", sub: "Your tribe is revealed. The arena is open." },
+  duel: { roman: "IV", title: "THE DUEL", sub: "Prime time. Find your opposite." },
+  bridge: { roman: "V", title: "THE BRIDGE", sub: "Overnight. The next paradox drops at dawn." },
 };
 
 const ALL_PHASES: Phase[] = ["drop", "vow", "sort", "duel", "bridge"];
 
 interface Props {
+  clockOverridden?: boolean;
   phase: Phase;
   nextTransitionAt: string;
   testMode?: boolean;
   onPhaseOverride?: (p: Phase) => void;
 }
 
-export function PhaseBanner({ phase, nextTransitionAt, testMode, onPhaseOverride }: Props) {
+export function PhaseBanner({ phase, nextTransitionAt, testMode, onPhaseOverride, clockOverridden }: Props) {
   const { roman, title, sub } = LABELS[phase];
   return (
     <div className="flex flex-col gap-2 border-b border-smoke px-4 py-3 font-mono text-xs uppercase tracking-brutal text-muted md:flex-row md:items-baseline md:justify-between md:px-6">
       <span className="truncate">
+        {clockOverridden && (
+          <span className="mr-3 border border-blood px-1 text-blood" title="An admin has forced this phase for testing">
+            TEST CLOCK
+          </span>
+        )}
         <span className="text-gold">PHASE {roman}</span>
         <span className="mx-3 text-muted">·</span>
         <span className="text-bone">{title}</span>

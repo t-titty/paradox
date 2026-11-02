@@ -25,6 +25,8 @@ flashbackRouter.get("/", requireAuth, async (req, res, next) => {
       where: {
         userId,
         createdAt: { lte: cutoff },
+        // Only real daily paradoxes — not the first-run practice dilemma.
+        paradox: { airDate: { not: null } },
       },
       orderBy: { createdAt: "desc" },
       take: 30,

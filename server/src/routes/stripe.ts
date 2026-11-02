@@ -5,7 +5,11 @@ import { HttpError } from "../middleware/error.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { getStripe } from "../lib/stripe.js";
 import { env } from "../env.js";
-import { resolveLookupKey, resolveFeatureLookupKey } from "../lib/pricing.js";
+import {
+  resolveLookupKey,
+  resolveFeatureLookupKey,
+  resolveSupporterLookupKey,
+} from "../lib/pricing.js";
 
 export const stripeRouter = Router();
 
@@ -56,7 +60,8 @@ stripeRouter.post("/checkout", requireAuth, async (req, res, next) => {
     const featurePlan = circlePlan
       ? null
       : resolveFeatureLookupKey(body.priceLookupKey);
-    if (!circlePlan && !featurePlan) {
+    const supporterPlan = resolveSupporterLookupKey(body.priceLookupKey);
+    if (!circlePlan && !featurePlan && !supporterPlan) {
       throw new HttpError(400, "Unknown price key", "unknown_price");
     }
 
@@ -87,9 +92,12 @@ stripeRouter.post("/checkout", requireAuth, async (req, res, next) => {
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { email: true },
+      select: { email: true, supporterStatus: true },
     });
     if (!user) throw new HttpError(404, "User not found", "not_found");
+    if (supporterPlan && (user.supporterStatus === "active" || user.supporterStatus === "trialing")) {
+      throw new HttpError(409, "You're already a Supporter — thank you!", "already_supporter");
+    }
 
     // Metadata shape stays identical across both plan kinds so the webhook
     // can read the same keys; organizationName is simply absent for
@@ -103,8 +111,12 @@ stripeRouter.post("/checkout", requireAuth, async (req, res, next) => {
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
       line_items: [{ price: price.id, quantity: 1 }],
-      success_url: `${env.PUBLIC_APP_URL}/pricing/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${env.PUBLIC_APP_URL}/pricing/cancel`,
+      success_url: supporterPlan
+        ? `${env.PUBLIC_APP_URL}/support?checkout=success`
+        : `${env.PUBLIC_APP_URL}/pricing/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: supporterPlan
+        ? `${env.PUBLIC_APP_URL}/support?checkout=cancel`
+        : `${env.PUBLIC_APP_URL}/pricing/cancel`,
       customer_email: user.email,
       client_reference_id: userId,
       metadata,
@@ -152,6 +164,30 @@ stripeRouter.post("/portal", requireAuth, async (req, res, next) => {
     const session = await stripe.billingPortal.sessions.create({
       customer: circle.stripeCustomerId,
       return_url: `${env.PUBLIC_APP_URL}/circles/manage/${circleId}`,
+    });
+    res.json({ url: session.url });
+  } catch (e) {
+    next(e);
+  }
+});
+
+/* ---------- POST /api/stripe/supporter-portal ---------- */
+
+/** Stripe billing portal for a Supporter: update card, switch plan, cancel. */
+stripeRouter.post("/supporter-portal", requireAuth, async (req, res, next) => {
+  try {
+    const stripe = mustStripe();
+    const { userId } = req as AuthedRequest;
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { supporterStripeCustomerId: true },
+    });
+    if (!user?.supporterStripeCustomerId) {
+      throw new HttpError(400, "No Supporter subscription on this account", "no_customer");
+    }
+    const session = await stripe.billingPortal.sessions.create({
+      customer: user.supporterStripeCustomerId,
+      return_url: `${env.PUBLIC_APP_URL}/support`,
     });
     res.json({ url: session.url });
   } catch (e) {

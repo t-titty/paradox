@@ -23,6 +23,13 @@ const registerSchema = z.object({
     .regex(/^[a-zA-Z0-9_]+$/, "Letters, numbers, underscore only"),
   email: z.string().email().max(200),
   password: z.string().min(8).max(128),
+  // "I am 13 or older, or I'm joining through my school with a teacher's
+  // invite code." Required for every new account.
+  ageConfirmed: z.literal(true, {
+    errorMap: () => ({
+      message: "Confirm you are 13 or older, or joining through your school.",
+    }),
+  }),
 });
 
 const loginSchema = z.object({
@@ -124,7 +131,14 @@ authRouter.post("/register", async (req, res, next) => {
 
     const hashedPassword = await bcrypt.hash(password, 12);
     const user = await prisma.user.create({
-      data: { username, email, hashedPassword },
+      data: {
+        username,
+        email,
+        hashedPassword,
+        ageAttestedAt: new Date(),
+        // Staging convenience: listed usernames start out as admins.
+        isAdmin: env.ADMIN_USERNAMES.includes(username.toLowerCase()),
+      },
       select: userSelect,
     });
 
@@ -141,11 +155,15 @@ authRouter.post("/login", async (req, res, next) => {
     const user = await prisma.user.findFirst({
       where: { OR: [{ username: identifier }, { email: identifier.toLowerCase() }] },
     });
-    if (!user) throw new HttpError(401, "Invalid credentials", "unauthenticated");
+    if (!user || user.isBot) throw new HttpError(401, "Invalid credentials", "unauthenticated");
 
     const ok = await bcrypt.compare(password, user.hashedPassword);
     if (!ok) throw new HttpError(401, "Invalid credentials", "unauthenticated");
     if (user.isBanned) throw new HttpError(403, "Account suspended", "banned");
+    if (!user.isAdmin && env.ADMIN_USERNAMES.includes(user.username.toLowerCase())) {
+      await prisma.user.update({ where: { id: user.id }, data: { isAdmin: true } });
+      user.isAdmin = true;
+    }
 
     // Password correct. If 2FA is on, require the code before issuing a token.
     if (user.twoFactorEnabled) {

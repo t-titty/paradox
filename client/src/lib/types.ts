@@ -11,11 +11,30 @@ export type Choice = "A" | "B";
 
 export type Phase = "drop" | "vow" | "sort" | "duel" | "bridge";
 
+export interface PhaseSchedule {
+  timezone: string;
+  dropHour: number;
+  vowEndHour: number;
+  duelHour: number;
+}
+
 export interface PhaseState {
   phase: Phase;
   today: string;
   nextTransitionAt: string;
+  /** ISO time of the next Drop — rendered in the viewer's local time. */
+  nextDropAt: string;
   testMode: boolean;
+  schedule: PhaseSchedule;
+  /** The phase is forced by the admin test clock (staging / dev). */
+  clockOverridden?: boolean;
+}
+
+export interface StreakSummary {
+  current: number;
+  best: number;
+  votedToday: boolean;
+  freezesAvailable: number;
 }
 
 export interface User {
@@ -60,6 +79,7 @@ export interface DailyTodayResponse {
     justification: string;
     tribeAssigned: Tribe | null;
     createdAt: string;
+    isLate?: boolean;
   } | null;
   /** Admin-issued exemption letting this user vote on today's paradox
    *  regardless of phase. Present only when the grant exists and is
@@ -69,6 +89,14 @@ export interface DailyTodayResponse {
    *  today's paradox via GlobalLateVowGrant. Drives the global gold
    *  banner shown to all non-voters. */
   globalLateVowActive: boolean;
+  /** Self-serve late vows are open (sort/duel phases) and you haven't voted. */
+  lateVowOpen: boolean;
+  /** The arena is open — human duels and AI spars. */
+  duelsOpen: boolean;
+  paradoxNumber: number | null;
+  streak: StreakSummary;
+  /** New account that hasn't done (or skipped) the practice round. */
+  needsOnboarding: boolean;
 }
 
 export interface ThrowbackTodayResponse {
@@ -103,8 +131,15 @@ export interface ThrowbackRevoteResponse {
   };
 }
 
+export interface ParadoxResults {
+  totalVotes: number;
+  choiceCounts: { A: number; B: number };
+  tribeCounts: Record<Tribe, number>;
+  tribeChoice: Record<Tribe, { A: number; B: number }>;
+}
+
 export interface SortResponse {
-  paradox: { id: string; title: string };
+  paradox: { id: string; title: string; number: number | null; airDate: string };
   yours: {
     choice: Choice;
     choiceText: string;
@@ -112,11 +147,30 @@ export interface SortResponse {
     tribe: Tribe | null;
     confidence: number | null;
     reasoning: string | null;
+    isLate: boolean;
+    /** Share of all vows that chose the same side as you. */
+    sidePct: number;
   };
-  consensus: {
-    totalVotes: number;
-    choiceCounts: { A: number; B: number };
-    tribeCounts: Record<Tribe, number>;
-  };
+  consensus: ParadoxResults;
+  streak: StreakSummary;
   phase: PhaseState;
+}
+
+export interface PublicDay {
+  date: string;
+  number: number | null;
+  paradox: Paradox;
+  resultsOpen: boolean;
+  results?: ParadoxResults;
+  syntheses?: { id: string; tribeA: Tribe; tribeB: Tribe; synthesisText: string; signedAt: string }[];
+  goldStars?: { id: string; tribe: Tribe; messageText: string; explanation: string }[];
+}
+
+export interface TribeWarsRow {
+  tribe: Tribe;
+  members: number;
+  goldStars: number;
+  redFlags: number;
+  syntheses: number;
+  score: number;
 }

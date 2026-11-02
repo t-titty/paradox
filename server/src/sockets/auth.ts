@@ -19,9 +19,11 @@ export async function authenticateSocket(socket: IoSocket, next: (err?: Error) =
     const decoded = jwt.verify(token, env.JWT_SECRET) as { sub: string };
     const user = await prisma.user.findUnique({
       where: { id: decoded.sub },
-      select: { id: true, username: true },
+      select: { id: true, username: true, isBanned: true, isBot: true },
     });
     if (!user) throw new Error("User not found");
+    // Banned players keep a valid JWT until it expires — keep them out of the arena.
+    if (user.isBanned || user.isBot) throw new Error("Account suspended");
 
     socket.data.userId = user.id;
     socket.data.username = user.username;

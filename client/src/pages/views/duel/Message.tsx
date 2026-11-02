@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import type { DuelMessageDTO } from "../../../lib/duelTypes.ts";
 
 interface Props {
@@ -9,28 +8,28 @@ interface Props {
 /**
  * One chat bubble. Renders fallacy and strong-logic markers inline.
  *
- * Ad hominem is a special case: the text is greyed out for 10 seconds after
- * the verdict arrives (per spec). We use the first time we see the verdict
- * as t=0; if the message arrives already-verdicted (e.g. on reconnect), we
- * skip the animation.
+ * Ad hominem is redacted server-side: the opponent receives an empty text
+ * and only ever sees a redaction mark. The author sees their own message
+ * greyed out with a note that it never reached the other side.
  */
 export function Message({ message, isSelf }: Props) {
-  const [muted, setMuted] = useState(false);
-
-  useEffect(() => {
-    if (message.verdict?.kind === "fallacy" && message.verdict.fallacyType === "ad_hominem") {
-      // Only mute if the verdict is fresh — detect via sentAt within last 30s.
-      const age = Date.now() - new Date(message.sentAt).getTime();
-      if (age < 30_000) {
-        setMuted(true);
-        const t = setTimeout(() => setMuted(false), 10_000);
-        return () => clearTimeout(t);
-      }
-    }
-  }, [message.verdict, message.sentAt]);
-
   const align = isSelf ? "items-end" : "items-start";
   const bubbleBorder = isSelf ? "border-bone" : "border-smoke";
+
+  if (message.redacted && !isSelf) {
+    return (
+      <div className={`flex flex-col gap-1 ${align}`}>
+        <div className="flex items-center gap-3 font-mono text-xs uppercase tracking-brutal text-muted">
+          <span className="text-bone">{message.username}</span>
+          <span>·</span>
+          <span>{fmtTime(message.sentAt)}</span>
+        </div>
+        <div className="max-w-2xl border-2 border-dashed border-blood bg-ink px-4 py-3 font-mono text-sm uppercase tracking-brutal text-blood">
+          ▇▇▇▇ REDACTED BY THE ORACLE · PERSONAL ATTACK ▇▇▇▇
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`flex flex-col gap-1 ${align}`}>
@@ -42,14 +41,23 @@ export function Message({ message, isSelf }: Props) {
       </div>
       <div
         className={`max-w-2xl border-2 ${bubbleBorder} bg-ink px-4 py-3 font-mono text-bone ${
-          muted ? "opacity-20" : "opacity-100"
+          message.redacted ? "line-through opacity-30" : "opacity-100"
         } transition-opacity duration-200`}
       >
         {message.text}
       </div>
-      {muted && (
+      {message.redacted && (
         <p className="font-mono text-xs uppercase tracking-brutal text-blood">
-          AD HOMINEM DETECTED · HIDDEN FOR 10 SECONDS
+          AD HOMINEM · YOUR OPPONENT NEVER SAW THIS
+        </p>
+      )}
+      {message.verdict && message.verdict.kind !== "clean" && message.verdict.explanation && !message.redacted && (
+        <p
+          className={`max-w-2xl font-mono text-[11px] ${
+            message.verdict.kind === "fallacy" ? "text-blood" : "text-gold"
+          }`}
+        >
+          ORACLE: {message.verdict.explanation}
         </p>
       )}
     </div>

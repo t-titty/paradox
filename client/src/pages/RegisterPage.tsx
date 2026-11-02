@@ -9,6 +9,7 @@ export function RegisterPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [agreed, setAgreed] = useState(false);
+  const [ageOk, setAgeOk] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -20,11 +21,16 @@ export function RegisterPage() {
       setError("You must agree to the Terms of Service to register.");
       return;
     }
+    if (!ageOk) {
+      setError("Confirm you are 13 or older, or joining through your school.");
+      return;
+    }
     setError(null);
     setSubmitting(true);
     try {
       await register(username.trim(), email.trim().toLowerCase(), password);
-      navigate("/", { replace: true });
+      // First stop for every new player: the 3-minute practice round.
+      navigate("/welcome", { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Registration failed.");
     } finally {
@@ -82,10 +88,22 @@ export function RegisterPage() {
             </span>
           </label>
 
+          <label className="flex cursor-pointer items-start gap-3 font-mono text-sm text-bone">
+            <input
+              type="checkbox"
+              className="mt-1 h-5 w-5 shrink-0 cursor-pointer accent-gold"
+              checked={ageOk}
+              onChange={(e) => setAgeOk(e.target.checked)}
+            />
+            <span>
+              I am 13 or older — or I'm joining through my school with a teacher's invite code.
+            </span>
+          </label>
+
           {error && (
             <p className="border-2 border-blood p-3 font-mono text-sm text-blood">{error}</p>
           )}
-          <button className="brutal-btn brutal-btn-gold" disabled={submitting || !agreed}>
+          <button className="brutal-btn brutal-btn-gold" disabled={submitting || !agreed || !ageOk}>
             {submitting ? "..." : "REGISTER"}
           </button>
         </form>

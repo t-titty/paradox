@@ -31,6 +31,62 @@ const schema = z.object({
   PUBLIC_APP_URL: z.string().url().default("http://localhost:5173"),
   ANTHROPIC_API_KEY: z.string().min(1),
   ANTHROPIC_MODEL: z.string().default("claude-sonnet-4-6"),
+  // Small, fast model for the per-message Crucible checks (Red Flags /
+  // Gold Stars / ad-hominem redaction). Runs on every duel message, so
+  // latency and cost matter far more than depth here.
+  ORACLE_FAST_MODEL: z.string().default("claude-haiku-5-5"),
+  // Effort for the fast model ("low" | "medium" | ...). Empty = omit the
+  // parameter (for models that don't support effort).
+  ORACLE_FAST_EFFORT: z.string().default("low"),
+  // Optional per-model price overrides for the Open Books cost math (JSON:
+  // {"model-id":{"input":USD_per_MTok,"output":USD_per_MTok}}).
+  AI_PRICES_JSON: z
+    .string()
+    .optional()
+    .transform((v) => (v && v.length > 0 ? v : undefined)),
+  // Let admins force the game phase from the admin panel ("test clock").
+  // For local dev and staging only — leave unset in production.
+  ALLOW_CLOCK_OVERRIDE: z
+    .string()
+    .optional()
+    .transform((v) => v === "true" || v === "1"),
+  // Comma-separated usernames that are made admins when they register or
+  // log in. Handy for a fresh staging copy.
+  ADMIN_USERNAMES: z
+    .string()
+    .optional()
+    .transform((v) =>
+      (v ?? "")
+        .split(",")
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean),
+    ),
+  // AI spars per day for players who aren't Supporters.
+  FREE_SPARS_PER_DAY: z.coerce.number().int().min(0).default(1),
+  // Model that plays the AI sparring partner. Defaults to ANTHROPIC_MODEL.
+  SPAR_MODEL: z
+    .string()
+    .optional()
+    .transform((v) => (v && v.length > 0 ? v : undefined)),
+  // The game clock. Every player shares one Drop / Vow close / Duel bell in
+  // this IANA zone, regardless of the host's own time zone.
+  PHASE_TIMEZONE: z
+    .string()
+    .default("America/New_York")
+    .refine((tz) => {
+      try {
+        new Intl.DateTimeFormat("en-US", { timeZone: tz });
+        return true;
+      } catch {
+        return false;
+      }
+    }, "PHASE_TIMEZONE must be a valid IANA time zone"),
+  // Self-serve late vows: players who miss the Vow window can still vote
+  // (and get sorted + duel) until midnight game time.
+  ALLOW_LATE_VOWS: z
+    .string()
+    .optional()
+    .transform((v) => v === undefined || v === "" || v === "true" || v === "1"),
   PHASE_DROP_HOUR: z.coerce.number().int().min(0).max(23).default(8),
   PHASE_VOW_END_HOUR: z.coerce.number().int().min(0).max(23).default(12),
   PHASE_SORT_END_HOUR: z.coerce.number().int().min(0).max(23).default(20),

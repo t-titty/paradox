@@ -8,6 +8,8 @@ type Tab =
   | "submissions"
   | "feedback"
   | "users"
+  | "reports"
+  | "books"
   | "developer";
 
 interface Stats {
@@ -17,6 +19,7 @@ interface Stats {
   synthesesSigned: number;
   pendingSubmissions: number;
   totalFeedback: number;
+  openReports?: number;
 }
 
 interface ParadoxRow {
@@ -96,6 +99,8 @@ export function AdminPage() {
         <TabBtn active={tab === "submissions"} onClick={() => setTab("submissions")}>SUBMISSIONS</TabBtn>
         <TabBtn active={tab === "feedback"} onClick={() => setTab("feedback")}>FEEDBACK</TabBtn>
         <TabBtn active={tab === "users"} onClick={() => setTab("users")}>USERS</TabBtn>
+        <TabBtn active={tab === "reports"} onClick={() => setTab("reports")}>REPORTS</TabBtn>
+        <TabBtn active={tab === "books"} onClick={() => setTab("books")}>OPEN BOOKS</TabBtn>
         <TabBtn active={tab === "developer"} onClick={() => setTab("developer")}>DEVELOPER</TabBtn>
       </nav>
 
@@ -109,6 +114,8 @@ export function AdminPage() {
           <LateVowGrantsPanel />
         </div>
       )}
+      {tab === "reports" && <ReportsPanel />}
+      {tab === "books" && <OpenBooksAdminPanel />}
       {tab === "developer" && <DeveloperPanel />}
     </div>
   );
@@ -178,6 +185,7 @@ function StatsPanel() {
       <StatCard label="SYNTHESES SIGNED" value={stats.synthesesSigned} />
       <StatCard label="PENDING SUBMISSIONS" value={stats.pendingSubmissions} />
       <StatCard label="TOTAL FEEDBACK" value={stats.totalFeedback} />
+      <StatCard label="OPEN REPORTS" value={stats.openReports ?? 0} />
     </div>
   );
 }
@@ -523,6 +531,257 @@ function FeedbackPanel() {
           <p className="mt-2 whitespace-pre-wrap font-mono text-sm text-bone">{f.message}</p>
         </article>
       ))}
+    </div>
+  );
+}
+
+interface ReportRow {
+  id: string;
+  reason: string;
+  note: string | null;
+  status: string;
+  createdAt: string;
+  reporter: { id: string; username: string };
+  reported: { id: string; username: string; civilityScore: number; isBanned: boolean; isBot: boolean };
+  duel: {
+    id: string;
+    kind: string;
+    startedAt: string;
+    transcriptJson: { id: string; username: string; text: string; mode: string; redacted?: boolean }[];
+    paradox: { title: string };
+  };
+}
+
+/** Player-filed duel reports, with the transcript inline for quick review. */
+function ReportsPanel() {
+  const [status, setStatus] = useState<"open" | "resolved">("open");
+  const [rows, setRows] = useState<ReportRow[] | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    setRows(null);
+    api
+      .get<{ reports: ReportRow[] }>("/admin/reports", { params: { status } })
+      .then((r) => setRows(r.data.reports))
+      .catch((e) => setErr(errorMessage(e, "Could not load reports.")));
+  }, [status]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function resolve(id: string) {
+    await api.post(`/admin/reports/${id}/resolve`).catch(() => undefined);
+    load();
+  }
+
+  async function ban(userId: string) {
+    if (!window.confirm("Ban this user?")) return;
+    await api.post(`/admin/users/${userId}/ban`, { banned: true }).catch(() => undefined);
+    load();
+  }
+
+  if (err) return <ErrorBox>{err}</ErrorBox>;
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex gap-2">
+        <TabBtn active={status === "open"} onClick={() => setStatus("open")}>OPEN</TabBtn>
+        <TabBtn active={status === "resolved"} onClick={() => setStatus("resolved")}>RESOLVED</TabBtn>
+      </div>
+      {!rows && <p className="brutal-heading text-muted">LOADING...</p>}
+      {rows && rows.length === 0 && <p className="font-mono text-sm text-muted">No {status} reports.</p>}
+      {rows?.map((r) => (
+        <article key={r.id} className="border-2 border-blood p-4">
+          <p className="font-mono text-xs uppercase tracking-brutal text-muted">
+            {r.reason} · {r.reporter.username} REPORTED{" "}
+            <span className="text-blood">{r.reported.username}</span>
+            {r.reported.isBot && " (AI PARTNER)"} · CIV {r.reported.civilityScore}
+            {r.reported.isBanned && " · BANNED"} · {new Date(r.createdAt).toLocaleString()}
+          </p>
+          <p className="mt-1 font-mono text-xs text-muted">
+            {r.duel.kind.toUpperCase()} DUEL · {r.duel.paradox.title}
+          </p>
+          {r.note && <p className="mt-2 font-mono text-sm text-bone">“{r.note}”</p>}
+          <details className="mt-3">
+            <summary className="cursor-pointer font-mono text-xs uppercase tracking-brutal text-gold">
+              TRANSCRIPT · {r.duel.transcriptJson.length} MESSAGES
+            </summary>
+            <div className="mt-2 flex max-h-80 flex-col gap-1 overflow-y-auto border border-smoke p-3 font-mono text-xs">
+              {r.duel.transcriptJson.map((m) => (
+                <p key={m.id} className={m.redacted ? "text-blood" : "text-bone"}>
+                  <span className="text-muted">[{m.mode}] {m.username}:</span> {m.text}
+                  {m.redacted && " (REDACTED — AD HOMINEM)"}
+                </p>
+              ))}
+            </div>
+          </details>
+          {r.status === "open" && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button className="brutal-btn text-xs" onClick={() => resolve(r.id)}>
+                MARK RESOLVED
+              </button>
+              {!r.reported.isBot && !r.reported.isBanned && (
+                <button className="brutal-btn brutal-btn-blood text-xs" onClick={() => ban(r.reported.id)}>
+                  BAN {r.reported.username}
+                </button>
+              )}
+            </div>
+          )}
+        </article>
+      ))}
+    </div>
+  );
+}
+
+interface OperatingCostRow {
+  id: string;
+  month: string;
+  category: string;
+  label: string;
+  amountCents: number;
+}
+
+function prevMonth(m: string): string {
+  const [y, mo] = m.split("-").map(Number);
+  const d = new Date(Date.UTC(y!, mo! - 2, 1));
+  return d.toISOString().slice(0, 7);
+}
+
+/**
+ * Fixed monthly running costs for the public Open Books page. AI spend and
+ * Stripe revenue/fees are recorded automatically — only bills go here.
+ */
+function OpenBooksAdminPanel() {
+  const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const [rows, setRows] = useState<OperatingCostRow[] | null>(null);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [category, setCategory] = useState("hosting");
+  const [label, setLabel] = useState("");
+  const [amount, setAmount] = useState("");
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    api
+      .get<{ costs: OperatingCostRow[]; categories: string[] }>("/admin/operating-costs", { params: { month } })
+      .then((r) => {
+        setRows(r.data.costs);
+        setCategories(r.data.categories);
+      })
+      .catch((e) => setMsg(errorMessage(e, "Could not load costs.")));
+  }, [month]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function add(e: FormEvent) {
+    e.preventDefault();
+    setMsg(null);
+    const cents = Math.round(parseFloat(amount) * 100);
+    if (!label.trim() || !Number.isFinite(cents) || cents < 0) {
+      setMsg("Enter a label and a dollar amount.");
+      return;
+    }
+    try {
+      await api.post("/admin/operating-costs", { month, category, label: label.trim(), amountCents: cents });
+      setLabel("");
+      setAmount("");
+      load();
+    } catch (err) {
+      setMsg(errorMessage(err, "Could not save."));
+    }
+  }
+
+  async function remove(id: string) {
+    await api.delete(`/admin/operating-costs/${id}`).catch(() => undefined);
+    load();
+  }
+
+  async function copyPrevious() {
+    setMsg(null);
+    try {
+      const { data } = await api.post<{ copied: number }>("/admin/operating-costs/copy", {
+        from: prevMonth(month),
+        to: month,
+      });
+      setMsg(`Copied ${data.copied} cost${data.copied === 1 ? "" : "s"} from ${prevMonth(month)}.`);
+      load();
+    } catch (err) {
+      setMsg(errorMessage(err, "Nothing to copy."));
+    }
+  }
+
+  const total = (rows ?? []).reduce((a, r) => a + r.amountCents, 0);
+
+  return (
+    <div className="flex flex-col gap-5">
+      <p className="font-mono text-sm text-muted">
+        Enter this month's bills (servers, database, domain, email...). AI usage and Stripe income/fees are recorded
+        automatically. Everything here is public on{" "}
+        <a href="/open-books" className="text-gold underline">
+          /open-books
+        </a>
+        .
+      </p>
+      <div className="flex flex-wrap items-center gap-3">
+        <input
+          type="month"
+          className="brutal-input w-auto"
+          value={month}
+          onChange={(e) => e.target.value && setMonth(e.target.value)}
+        />
+        <button className="brutal-btn text-xs" onClick={copyPrevious}>
+          COPY FROM {prevMonth(month)}
+        </button>
+      </div>
+      <form onSubmit={add} className="flex flex-wrap gap-2">
+        <select className="brutal-input w-auto" value={category} onChange={(e) => setCategory(e.target.value)}>
+          {categories.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
+        <input
+          className="brutal-input flex-1"
+          placeholder="Label, e.g. Railway Hobby plan"
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+        />
+        <input
+          className="brutal-input w-32"
+          placeholder="$0.00"
+          inputMode="decimal"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+        />
+        <button className="brutal-btn brutal-btn-gold">ADD</button>
+      </form>
+      {msg && <p className="font-mono text-xs text-gold">{msg}</p>}
+      {!rows && <p className="brutal-heading text-muted">LOADING...</p>}
+      {rows && rows.length === 0 && <p className="font-mono text-sm text-muted">No fixed costs entered for {month}.</p>}
+      {rows && rows.length > 0 && (
+        <ul className="flex flex-col border-2 border-smoke">
+          {rows.map((r) => (
+            <li key={r.id} className="flex items-center justify-between gap-3 border-b border-smoke px-4 py-2 font-mono text-sm">
+              <span className="text-bone">
+                <span className="text-muted">{r.category} · </span>
+                {r.label}
+              </span>
+              <span className="flex items-center gap-4">
+                <span className="text-bone">${(r.amountCents / 100).toFixed(2)}</span>
+                <button className="text-xs text-blood underline" onClick={() => remove(r.id)}>
+                  REMOVE
+                </button>
+              </span>
+            </li>
+          ))}
+          <li className="flex justify-between px-4 py-2 font-mono text-sm text-gold">
+            <span>TOTAL</span>
+            <span>${(total / 100).toFixed(2)}</span>
+          </li>
+        </ul>
+      )}
     </div>
   );
 }
@@ -1018,6 +1277,91 @@ function GlobalLateVowGrantPanel({
 // DEVELOPER CONTROLS
 // ─────────────────────────────────────────────────────────────────────────
 
+/**
+ * Test clock: force the whole game into one phase for every player, so a
+ * group of testers can play the vow → sort → duel loop at any hour.
+ * Only works where the server sets ALLOW_CLOCK_OVERRIDE=true (dev/staging).
+ */
+function TestClockPanel() {
+  const [state, setState] = useState<{ available: boolean; override: string | null; phase: { phase: string } } | null>(
+    null,
+  );
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    api
+      .get("/admin/clock")
+      .then((r) => setState(r.data))
+      .catch((e) => setErr(errorMessage(e, "Could not load the test clock.")));
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function set(phase: string) {
+    setBusy(true);
+    setErr(null);
+    try {
+      await api.post("/admin/clock", { phase });
+      load();
+    } catch (e) {
+      setErr(errorMessage(e, "Could not set the clock."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const options: { key: string; label: string; hint: string }[] = [
+    { key: "vow", label: "VOW", hint: "Everyone can vote on today's dilemma" },
+    { key: "sort", label: "SORT + ARENA", hint: "Results, duels, AI spars, late vows" },
+    { key: "duel", label: "PRIME-TIME DUEL", hint: "Same as arena, evening wording" },
+    { key: "bridge", label: "OVERNIGHT", hint: "Countdown to the next drop + highlights" },
+    { key: "off", label: "REAL CLOCK", hint: "Back to the real schedule" },
+  ];
+
+  return (
+    <section>
+      <p className="font-mono text-xs uppercase tracking-brutal text-muted">TEST CLOCK · EVERY PLAYER</p>
+      <div className="mt-2 border-2 border-bone p-4 md:p-5">
+        {!state ? (
+          <p className="font-mono text-sm text-muted">{err ?? "LOADING..."}</p>
+        ) : !state.available ? (
+          <p className="font-mono text-sm text-muted">
+            Disabled on this server. Set <span className="text-gold">ALLOW_CLOCK_OVERRIDE=true</span> on a local or
+            staging copy to use it. Never enable it on the live game.
+          </p>
+        ) : (
+          <>
+            <p className="font-mono text-sm text-bone">
+              Current phase: <span className="text-gold">{state.phase.phase.toUpperCase()}</span>
+              {state.override ? " (forced)" : " (real clock)"}. Changes apply to everyone within a few seconds —
+              players refresh the page to see it.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {options.map((o) => (
+                <button
+                  key={o.key}
+                  title={o.hint}
+                  disabled={busy}
+                  onClick={() => set(o.key)}
+                  className={`brutal-btn text-xs ${
+                    (state.override ?? "off") === o.key ? "brutal-btn-gold" : ""
+                  }`}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+            {err && <p className="mt-3 font-mono text-xs text-blood">{err}</p>}
+          </>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function DeveloperPanel() {
   const [systemTestMode, setSystemTestMode] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
@@ -1069,6 +1413,7 @@ function DeveloperPanel() {
 
   return (
     <div className="flex flex-col gap-6">
+      <TestClockPanel />
       <section>
         <p className="font-mono text-xs uppercase tracking-brutal text-muted">
           SYSTEM TEST MODE

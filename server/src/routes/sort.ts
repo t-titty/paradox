@@ -4,7 +4,10 @@ import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { HttpError } from "../middleware/error.js";
 import { parseYmd, resolvePhase } from "../phases.js";
 import { effectiveTestMode } from "../lib/testMode.js";
-import { sortIntoTribe, TRIBES, type TribeName } from "../lib/oracle.js";
+import type { TribeName } from "../lib/oracle.js";
+import { sortVote } from "../lib/sorting.js";
+import { paradoxNumber, paradoxResults } from "../lib/results.js";
+import { computeStreakForUser } from "../lib/streaks.js";
 
 export const sortRouter = Router();
 
@@ -12,12 +15,13 @@ export const sortRouter = Router();
  * GET /api/sort/me
  * Phase III — The Sort.
  *
- * If the caller has voted today and not yet been sorted, call the Oracle now
- * (lazy sort). Return the caller's tribe plus today's global consensus so the
- * client can render the tribe-vs-world visualization.
+ * Votes are normally sorted in bulk by the background job the moment the
+ * Vow closes, so this is usually a read. If the caller's vote is still
+ * unsorted (e.g. the batch hasn't reached it), sort it now.
  *
- * The spec says sorting begins at 12:00 PM. Before that we return 425 so the
- * client can show "not yet" UI. PHASE_OVERRIDE skips the gate for demos.
+ * Returns the caller's tribe plus today's results — vote split, tribe
+ * distribution and how each tribe split — for the results reveal and the
+ * share card.
  */
 sortRouter.get("/me", requireAuth, async (req, res, next) => {
   try {
@@ -27,16 +31,11 @@ sortRouter.get("/me", requireAuth, async (req, res, next) => {
     // Stamp the caller's effective testMode onto the phase so the client
     // banner / "SORT ME NOW" button render per-user, not by system env.
     const phase = { ...basePhase, testMode };
+
     const airDate = parseYmd(phase.today);
-
-    // Test mode: "Sort Me Now" — skip the phase gate entirely.
-    if (!testMode && (phase.phase === "vow" || phase.phase === "bridge")) {
-      throw new HttpError(425, "Sorting begins after the Vow closes.", "phase_early");
-    }
-
     const paradox = await prisma.paradox.findUnique({
       where: { airDate },
-      select: { id: true, title: true, description: true, optionA: true, optionB: true },
+      select: { id: true, title: true, optionA: true, optionB: true, airDate: true },
     });
     if (!paradox) throw new HttpError(404, "No paradox for today", "no_paradox_today");
 
@@ -44,73 +43,36 @@ sortRouter.get("/me", requireAuth, async (req, res, next) => {
       where: { userId_paradoxId: { userId, paradoxId: paradox.id } },
     });
     if (!vote) {
-      throw new HttpError(
-        403,
-        "You did not vow today. No tribe to report.",
-        "no_vote",
-      );
+      throw new HttpError(403, "You did not vow today. No tribe to report.", "no_vote");
     }
 
-    // Lazy sort: if Oracle hasn't assigned yet, do it now.
+    // Results stay hidden while the Vow is open so they can't sway anyone.
+    // Late vowers have already voted, so they can see them straight away.
+    if (!testMode && phase.phase === "vow") {
+      throw new HttpError(425, "Sorting begins after the Vow closes.", "phase_early");
+    }
+
     let tribe = vote.tribeAssigned as TribeName | null;
     let confidence = vote.tribeConfidence;
     let reasoning = vote.tribeReasoning;
-
     if (!tribe) {
-      const choiceText = vote.choice === "A" ? paradox.optionA : paradox.optionB;
-      const result = await sortIntoTribe({
-        paradoxTitle: paradox.title,
-        paradoxDescription: paradox.description,
-        choiceText,
-        justification: vote.justification,
-      });
-
-      await prisma.$transaction([
-        prisma.vote.update({
-          where: { id: vote.id },
-          data: {
-            tribeAssigned: result.tribe,
-            tribeConfidence: result.confidence,
-            tribeReasoning: result.reasoning,
-            sortedAt: new Date(),
-          },
-        }),
-        prisma.tribeHistory.upsert({
-          where: { userId_paradoxId: { userId, paradoxId: paradox.id } },
-          create: { userId, paradoxId: paradox.id, tribe: result.tribe, airDate },
-          update: { tribe: result.tribe },
-        }),
-      ]);
-
+      const result = await sortVote(vote.id);
       tribe = result.tribe;
       confidence = result.confidence;
       reasoning = result.reasoning;
     }
 
-    // Global consensus — vote split + tribe distribution (only among sorted users).
-    const [choiceCountsRaw, tribeCountsRaw] = await Promise.all([
-      prisma.vote.groupBy({
-        by: ["choice"],
-        where: { paradoxId: paradox.id },
-        _count: { _all: true },
-      }),
-      prisma.vote.groupBy({
-        by: ["tribeAssigned"],
-        where: { paradoxId: paradox.id, tribeAssigned: { not: null } },
-        _count: { _all: true },
-      }),
+    const [consensus, number, streak] = await Promise.all([
+      paradoxResults(paradox.id),
+      paradoxNumber(paradox.airDate),
+      computeStreakForUser(userId, phase.today),
     ]);
 
-    const choiceCounts = { A: 0, B: 0 };
-    for (const row of choiceCountsRaw) choiceCounts[row.choice] = row._count._all;
-
-    const tribeCounts = Object.fromEntries(TRIBES.map((t) => [t, 0])) as Record<TribeName, number>;
-    for (const row of tribeCountsRaw) {
-      if (row.tribeAssigned) tribeCounts[row.tribeAssigned as TribeName] = row._count._all;
-    }
+    const sideCount = consensus.choiceCounts[vote.choice];
+    const sidePct = consensus.totalVotes > 0 ? Math.round((sideCount / consensus.totalVotes) * 100) : 100;
 
     res.json({
-      paradox: { id: paradox.id, title: paradox.title },
+      paradox: { id: paradox.id, title: paradox.title, number, airDate: phase.today },
       yours: {
         choice: vote.choice,
         choiceText: vote.choice === "A" ? paradox.optionA : paradox.optionB,
@@ -118,12 +80,11 @@ sortRouter.get("/me", requireAuth, async (req, res, next) => {
         tribe,
         confidence,
         reasoning,
+        isLate: vote.isLate,
+        sidePct,
       },
-      consensus: {
-        totalVotes: choiceCounts.A + choiceCounts.B,
-        choiceCounts,
-        tribeCounts,
-      },
+      consensus,
+      streak,
       phase,
     });
   } catch (e) {

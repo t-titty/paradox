@@ -5,8 +5,11 @@ const TOKEN_KEY = "paradox.token";
 // VITE_API_BASE_URL is baked in at build time. In production Railway sets
 // it to the deployed origin; in dev we fall back to the local server.
 // Trailing slashes are trimmed so we never produce "//api".
+// Production builds served by the PARADOX server itself (Railway, staging)
+// can leave it unset — the API is then the page's own origin.
 export const API_URL = (
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:4000"
+  import.meta.env.VITE_API_BASE_URL ||
+  (import.meta.env.PROD ? window.location.origin : "http://localhost:4000")
 ).replace(/\/+$/, "");
 
 export const api = axios.create({

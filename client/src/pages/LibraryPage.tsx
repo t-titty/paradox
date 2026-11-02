@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, errorMessage } from "../lib/api.ts";
+import { formatAirDate } from "../lib/dates.ts";
 
 interface DeepDive {
   paradoxId: string;
@@ -70,7 +71,7 @@ function DeepDiveCard({ dive }: { dive: DeepDive }) {
   return (
     <article className={`border-2 p-5 ${dive.locked ? "border-smoke" : "border-gold"}`}>
       <p className="font-mono text-xs uppercase tracking-brutal text-muted">
-        {dive.category} · {dive.airDate ? new Date(dive.airDate).toDateString().toUpperCase() : "UNAIRED"}
+        {dive.category} · {dive.airDate ? formatAirDate(dive.airDate) : "UNAIRED"}
       </p>
       <h3 className="brutal-heading mt-2 text-2xl text-bone">{dive.paradoxTitle.toUpperCase()}</h3>
       <p className="mt-3 font-mono text-sm text-bone">{dive.preview}</p>

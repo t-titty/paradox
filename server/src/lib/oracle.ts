@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import { env } from "../env.js";
 import { HttpError } from "../middleware/error.js";
+import { recordAiUsage } from "./aiUsage.js";
 
 const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
 
@@ -127,6 +128,7 @@ export async function sortIntoTribe(args: SortArgs): Promise<TribeResult> {
       ],
       messages: [{ role: "user", content: userMessage }],
     });
+    recordAiUsage("sort", env.ANTHROPIC_MODEL, response.usage);
 
     const text = response.content
       .filter((b): b is Anthropic.TextBlock => b.type === "text")

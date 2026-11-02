@@ -13,8 +13,10 @@ import {
   pushSupported,
 } from "../lib/push.ts";
 import type { Choice, Tribe } from "../lib/types.ts";
+import { formatAirDate } from "../lib/dates.ts";
+import { ProgressionPanel, type Progression } from "../components/ProgressionPanel.tsx";
 
-interface ProfileData {
+interface ProfileData extends Progression {
   user: {
     id: string;
     username: string;
@@ -69,6 +71,7 @@ export function ProfilePage() {
   const [data, setData] = useState<ProfileData | null>(null);
   const [flashback, setFlashback] = useState<FlashbackResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     if (!username) return;
@@ -82,7 +85,7 @@ export function ProfilePage() {
     return () => {
       cancelled = true;
     };
-  }, [username]);
+  }, [username, reloadKey]);
 
   useEffect(() => {
     if (!isSelf) {
@@ -130,7 +133,7 @@ export function ProfilePage() {
         </h1>
         <p className="mt-3 font-mono text-xs uppercase tracking-brutal text-muted">
           JOINED {joined}
-          {user.isPremium && <span className="ml-3 text-gold">· PREMIUM</span>}
+          {user.isPremium && <span className="ml-3 text-gold">· ★ SUPPORTER</span>}
         </p>
       </header>
 
@@ -141,7 +144,7 @@ export function ProfilePage() {
           value={`${user.civilityScore}/100`}
           tone={user.civilityScore < 40 ? "blood" : user.civilityScore < 70 ? "bone" : "gold"}
         />
-        <Stat label="DUELS LOGGED" value={String(history.length)} tone="bone" />
+        <Stat label="DUELS FOUGHT" value={String(data.stats.pvpDuels)} tone="bone" />
         <Stat
           label="DOMINANT TRIBE"
           value={dominantTribe(tribeCounts)}
@@ -149,8 +152,18 @@ export function ProfilePage() {
         />
       </section>
 
+      <ProgressionPanel
+        data={data}
+        isSelf={isSelf}
+        wisdomPoints={user.wisdomPoints}
+        onChanged={() => {
+          setReloadKey((k) => k + 1);
+          void refreshUser?.();
+        }}
+      />
+
       <section className="flex flex-col gap-3">
-        <h2 className="brutal-heading text-sm text-muted">CONSTELLATION</h2>
+        <h2 className="brutal-heading text-sm text-muted">CONSTELLATION · {history.length} VOWS</h2>
         <Constellation position={constellation.position} trajectory={constellation.trajectory} />
         <div className="grid grid-cols-1 gap-2 font-mono text-xs text-muted md:grid-cols-3">
           <p>
@@ -184,7 +197,7 @@ export function ProfilePage() {
                 <p className="font-mono text-xs uppercase tracking-brutal text-muted">
                   {p.category} ·{" "}
                   {p.airDate
-                    ? new Date(p.airDate).toDateString().toUpperCase()
+                    ? formatAirDate(p.airDate)
                     : "UNSCHEDULED"}
                 </p>
                 <h3 className="brutal-heading mt-2 text-xl text-bone">
